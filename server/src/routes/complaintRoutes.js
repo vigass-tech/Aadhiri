@@ -9,7 +9,9 @@ const {
   updateComplaintStatus,
   updateComplaint,
   deleteComplaint,
-  analyzeCivicImageAI
+  verifyComplaintImage,
+  analyzeCivicImageAI,
+  overrideAIAssessment
 } = require('../controllers/complaintController');
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleMiddleware');
@@ -20,6 +22,7 @@ router.get('/track/:ticketId', trackComplaintPublic);
 // Protected routes
 router.use(protect);
 
+router.post('/verify-image', verifyComplaintImage);
 router.post('/ai-analyze', analyzeCivicImageAI);
 
 router.route('/')
@@ -33,6 +36,7 @@ router.route('/:id')
 
 router.patch('/:id/assign', authorize('SUPER_ADMIN', 'ADMIN'), assignComplaint);
 router.patch('/:id/status', authorize('SUPER_ADMIN', 'ADMIN'), updateComplaintStatus);
+router.patch('/:id/override-ai', authorize('SUPER_ADMIN', 'ADMIN', 'REVIEWER'), overrideAIAssessment);
 
 module.exports = router;
 

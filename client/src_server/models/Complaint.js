@@ -73,7 +73,7 @@ const complaintSchema = new mongoose.Schema(
     priority: {
       type: String,
       enum: {
-        values: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
+        values: ['LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL'],
         message: '{VALUE} is not a valid priority'
       },
       default: 'MEDIUM'
@@ -110,9 +110,34 @@ const complaintSchema = new mongoose.Schema(
       lng: { type: Number, default: null }
     },
     aiAnalysis: {
-      detectedIssue: { type: String, default: '' },
+      isValidCivicIssue: { type: Boolean, default: true },
+      predictedCategory: { type: String, default: '' },
+      predictedSeverity: {
+        type: String,
+        enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'URGENT', ''],
+        default: ''
+      },
       confidence: { type: Number, default: 0 },
-      autoStatement: { type: String, default: '' }
+      detectedIssue: { type: String, default: '' },
+      explanation: { type: String, default: '' },
+      recommendedAction: { type: String, default: '' },
+      autoStatement: { type: String, default: '' },
+      isLowConfidence: { type: Boolean, default: false },
+      requiresManualReview: { type: Boolean, default: false },
+      invalidReason: { type: String, default: '' },
+      modelVersion: { type: String, default: 'MobileNetV3-Civic-v1.0' }
+    },
+    humanReview: {
+      isOverridden: { type: Boolean, default: false },
+      verifiedCategory: { type: String, default: '' },
+      verifiedSeverity: {
+        type: String,
+        enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'URGENT', ''],
+        default: ''
+      },
+      reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      reviewedAt: { type: Date, default: null },
+      reviewNotes: { type: String, default: '' }
     },
     attachments: [
       {

@@ -55,7 +55,7 @@ const RaiseComplaint = () => {
 
   // Form State
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('Roads & Infrastructure');
+  const [category, setCategory] = useState('Potholes and damaged roads');
   const [priority, setPriority] = useState('HIGH');
   const [departmentId, setDepartmentId] = useState('');
   const [departments, setDepartments] = useState([]);
@@ -367,45 +367,55 @@ const RaiseComplaint = () => {
     setAiStatement(null);
 
     try {
-      const res = await api.post('/complaints/ai-analyze', {
-        image: imageData,
-        hintCategory: category,
-        userNotes: description
-      });
+      let res;
+      try {
+        res = await api.post('/complaints/verify-image', {
+          image: imageData,
+          hintCategory: category,
+          userNotes: description
+        });
+      } catch (err1) {
+        res = await api.post('/complaints/ai-analyze', {
+          image: imageData,
+          hintCategory: category,
+          userNotes: description
+        });
+      }
 
       if (res.data.success) {
-        setAiStatement(res.data.analysis);
-        // Only auto-populate fields if AI verified that this is a genuine civic issue
-        if (res.data.analysis.isCivicIssue) {
-          if (res.data.analysis.category) {
-            setCategory(res.data.analysis.category);
+        const analysis = res.data.analysis;
+        setAiStatement(analysis);
+        // Auto-populate fields if AI verified that this is a genuine civic issue
+        if (analysis.isValidCivicIssue) {
+          if (analysis.category && analysis.category !== 'Unknown / unrecognized') {
+            setCategory(analysis.category);
           }
-          if (res.data.analysis.suggestedPriority) {
-            setPriority(res.data.analysis.suggestedPriority);
+          if (analysis.severity) {
+            setPriority(analysis.severity);
           }
-          if (res.data.analysis.department) {
-            setDepartmentId(res.data.analysis.department);
+          if (analysis.department) {
+            setDepartmentId(analysis.department);
           }
         }
       }
     } catch (err) {
-      console.warn('AI analysis failed:', err);
+      console.warn('AI verification failed:', err);
     } finally {
       setAnalyzingAI(false);
     }
   };
 
   const applyAIStatement = () => {
-    if (!aiStatement || !aiStatement.isCivicIssue) return;
+    if (!aiStatement || !aiStatement.isValidCivicIssue) return;
     const stmt = lang === 'ta' ? aiStatement.statementTa : aiStatement.statementEn;
     if (stmt) {
       setDescription(stmt);
     }
-    if (aiStatement.category) {
+    if (aiStatement.category && aiStatement.category !== 'Unknown / unrecognized') {
       setCategory(aiStatement.category);
     }
-    if (aiStatement.suggestedPriority) {
-      setPriority(aiStatement.suggestedPriority);
+    if (aiStatement.severity) {
+      setPriority(aiStatement.severity);
     }
     if (aiStatement.department) {
       setDepartmentId(aiStatement.department);
@@ -422,7 +432,7 @@ const RaiseComplaint = () => {
       return;
     }
 
-    if (aiStatement && !aiStatement.isCivicIssue) {
+    if (aiStatement && aiStatement.isValidCivicIssue === false) {
       setError(
         lang === 'ta'
           ? 'பதிவேற்றப்பட்ட படம் பொது குறைபாடு அல்ல என AI கண்டறிந்துள்ளது. தயவுசெய்து பொது உள்கட்டமைப்பு சேத புகைப்படத்தை பதிவேற்றவும்.'
@@ -445,9 +455,17 @@ const RaiseComplaint = () => {
         coordinates: coords,
         aiAnalysis: aiStatement
           ? {
-              detectedIssue: aiStatement.detectedIssue,
+              isValidCivicIssue: aiStatement.isValidCivicIssue !== false,
+              predictedCategory: aiStatement.category,
+              predictedSeverity: aiStatement.severity,
               confidence: aiStatement.confidence,
-              autoStatement: lang === 'ta' ? aiStatement.statementTa : aiStatement.statementEn
+              detectedIssue: aiStatement.detectedIssue,
+              explanation: aiStatement.explanation,
+              recommendedAction: aiStatement.recommendedAction,
+              autoStatement: lang === 'ta' ? aiStatement.statementTa : aiStatement.statementEn,
+              isLowConfidence: Boolean(aiStatement.isLowConfidence),
+              requiresManualReview: Boolean(aiStatement.requiresManualReview),
+              modelVersion: 'MobileNetV3-Civic-v1.0'
             }
           : undefined,
         attachments: imagePreview
@@ -738,7 +756,7 @@ const RaiseComplaint = () => {
           )}
 
           {/* 6A. Non-Civic Image Rejection Box */}
-          {aiStatement && !aiStatement.isCivicIssue && (
+          {aiStatement && !aiStatement.isValidCivicIssue && (
             <div
               className="p-4 rounded-3 border mb-4 shadow-sm"
               style={{ backgroundColor: '#fff7ed', borderColor: '#fdba74' }}
@@ -757,14 +775,11 @@ const RaiseComplaint = () => {
 
               <div className="p-3 bg-white rounded border border-warning mb-3 text-dark small" style={{ lineHeight: 1.6 }}>
                 <div className="text-danger fw-semibold mb-1">
-                  {lang === 'ta'
-                    ? aiStatement.validationMessageTa || 'இந்த படம் நகராட்சி அல்லது பொது உள்கட்டமைப்பு குறைபாட்டை காட்டவில்லை.'
-                    : aiStatement.validationMessageEn || 'This photo does not depict any municipal grievance or public infrastructure defect.'}
+                  {aiStatement.explanation || 'This image does not depict any municipal grievance or public infrastructure defect.'}
                 </div>
-                {aiStatement.detectedContent && (
+                {aiStatement.recommendedAction && (
                   <div className="text-muted small mt-2 pt-1 border-top">
-                    <strong>{lang === 'ta' ? 'கண்டறியப்பட்ட பொருள் / உள்ளடக்கம்:' : 'Detected Subject in Photo:'}</strong>{' '}
-                    <span className="badge bg-light text-dark border ms-1">{aiStatement.detectedContent}</span>
+                    <strong>Recommended Action:</strong> {aiStatement.recommendedAction}
                   </div>
                 )}
               </div>
@@ -789,8 +804,8 @@ const RaiseComplaint = () => {
             </div>
           )}
 
-          {/* 6B. Validated Civic Defect & Emergency Triage Box */}
-          {aiStatement && aiStatement.isCivicIssue && (
+          {/* 6B. Validated Civic Defect & Severity Triage Box */}
+          {aiStatement && aiStatement.isValidCivicIssue && (
             <div
               className="p-4 rounded-3 border mb-4 shadow-sm"
               style={{ backgroundColor: '#f0fdf4', borderColor: '#86efac' }}
@@ -804,68 +819,72 @@ const RaiseComplaint = () => {
                     </span>
                   )}
                   <span className="text-muted ms-1" style={{ fontSize: '0.75rem' }}>
-                    ({(aiStatement.confidence * 100).toFixed(0)}% Match)
+                    ({(aiStatement.confidence * 100).toFixed(0)}% Confidence)
                   </span>
                 </span>
                 <span className="badge bg-success px-2 py-1">
-                  {lang === 'ta' ? aiStatement.detectedIssueTa : aiStatement.detectedIssue}
+                  {lang === 'ta' ? aiStatement.detectedIssueTa || aiStatement.category : aiStatement.detectedIssue || aiStatement.category}
                 </span>
               </div>
 
-              {/* Priority & Emergency Rating Reason */}
-              {(aiStatement.emergencyReasonEn || aiStatement.emergencyReasonTa) && (
+              {/* Low Confidence Warning Notice */}
+              {aiStatement.isLowConfidence && (
+                <div className="alert alert-warning py-1 px-2 small mb-2 d-flex align-items-center gap-1">
+                  <AlertCircle size={14} className="text-warning flex-shrink-0" />
+                  <span>Low confidence prediction ({(aiStatement.confidence * 100).toFixed(0)}%). Marked for staff manual review upon submission.</span>
+                </div>
+              )}
+
+              {/* Urgent Escalation Warning for HIGH or CRITICAL issues */}
+              {(aiStatement.severity === 'CRITICAL' || aiStatement.severity === 'HIGH') && (
                 <div
                   className="p-2 px-3 rounded mb-2 small d-flex align-items-center gap-2"
                   style={{
-                    backgroundColor:
-                      aiStatement.suggestedPriority === 'URGENT'
-                        ? '#fee2e2'
-                        : aiStatement.suggestedPriority === 'HIGH'
-                        ? '#ffedd5'
-                        : '#eff6ff',
-                    borderLeft: `4px solid ${
-                      aiStatement.suggestedPriority === 'URGENT'
-                        ? '#dc2626'
-                        : aiStatement.suggestedPriority === 'HIGH'
-                        ? '#ea580c'
-                        : '#2563eb'
-                    }`
+                    backgroundColor: aiStatement.severity === 'CRITICAL' ? '#fee2e2' : '#ffedd5',
+                    borderLeft: `4px solid ${aiStatement.severity === 'CRITICAL' ? '#dc2626' : '#ea580c'}`
                   }}
                 >
-                  <span className="fw-bold text-dark">{t.aiEmergencyReason}</span>
+                  <span className="fw-bold text-danger">🚨 Urgent Safety Alert:</span>
                   <span className="text-dark">
-                    {lang === 'ta' ? aiStatement.emergencyReasonTa : aiStatement.emergencyReasonEn}
+                    This issue has been tagged as <strong>{aiStatement.severity}</strong> severity. An escalation alert will be dispatched to the municipal team immediately upon submission.
                   </span>
                 </div>
               )}
 
-              <div className="small text-muted mb-2">
-                <strong>{t.aiStatementLabel}</strong>
-              </div>
+              {/* Explanation & Recommended Action */}
               <div className="p-3 bg-white rounded border mb-3 text-dark small" style={{ lineHeight: 1.6 }}>
-                {lang === 'ta' ? aiStatement.statementTa : aiStatement.statementEn}
+                {aiStatement.explanation && (
+                  <div className="mb-2">
+                    <strong>AI Assessment:</strong> {aiStatement.explanation}
+                  </div>
+                )}
+                {aiStatement.recommendedAction && (
+                  <div className="text-primary">
+                    <strong>Recommended Field Action:</strong> {aiStatement.recommendedAction}
+                  </div>
+                )}
               </div>
 
               <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div className="small text-muted d-flex align-items-center gap-2 flex-wrap">
-                  <span><strong>Dept:</strong> {aiStatement.departmentName}</span>
+                  <span><strong>Dept:</strong> {aiStatement.departmentName || 'Public Works (PWD)'}</span>
                   <span>•</span>
-                  <span><strong>Priority:</strong>{' '}
+                  <span><strong>Severity Level:</strong>{' '}
                     <span
                       className="badge fw-bold"
                       style={{
                         backgroundColor:
-                          aiStatement.suggestedPriority === 'URGENT'
+                          aiStatement.severity === 'CRITICAL'
                             ? '#dc2626'
-                            : aiStatement.suggestedPriority === 'HIGH'
+                            : aiStatement.severity === 'HIGH'
                             ? '#ea580c'
-                            : aiStatement.suggestedPriority === 'MEDIUM'
+                            : aiStatement.severity === 'MEDIUM'
                             ? '#2563eb'
                             : '#64748b',
                         color: '#ffffff'
                       }}
                     >
-                      {aiStatement.suggestedPriority}
+                      {aiStatement.severity}
                     </span>
                   </span>
                 </div>
@@ -880,37 +899,43 @@ const RaiseComplaint = () => {
             </div>
           )}
 
-          {/* 7. Category & Priority Selector (Foldable details) */}
+          {/* 7. Category & Priority Selector (With Citizen Correction Capability) */}
           <div className="row g-3 mb-4">
             <div className="col-md-6">
-              <label className="gov-label small">
-                {lang === 'ta' ? 'துறை வகை' : 'Issue Category'}
+              <label className="gov-label small d-flex justify-content-between">
+                <span>{lang === 'ta' ? 'குறைபாடு வகை' : 'Civic Issue Category'}</span>
+                <span className="text-muted fw-normal" style={{ fontSize: '0.72rem' }}>(Auto-filled by AI / Editable)</span>
               </label>
               <select
                 className="gov-select"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
               >
-                <option value="Roads & Infrastructure">Roads & Infrastructure (சாலைகள்)</option>
-                <option value="Water Supply">Water Supply (குடிநீர்)</option>
-                <option value="Electricity & Lighting">Electricity & Lighting (மின்சாரம் / தெருவிளக்கு)</option>
-                <option value="Sanitation & Waste">Sanitation & Waste (தூய்மைப் பணி / குப்பை)</option>
-                <option value="Public Health">Public Health (பொது சுகாதாரம்)</option>
+                <option value="Potholes and damaged roads">Potholes and damaged roads (சாலை குழிகள்)</option>
+                <option value="Garbage and illegal dumping">Garbage and illegal dumping (குப்பைக் கழிவுகள்)</option>
+                <option value="Overflowing drainage and sewage">Overflowing drainage and sewage (சாக்கடை கழிவுநீர்)</option>
+                <option value="Water leakage and waterlogging">Water leakage and waterlogging (குடிநீர் கசிவு)</option>
+                <option value="Damaged streetlights">Damaged streetlights (பழுதடைந்த தெருவிளக்குகள்)</option>
+                <option value="Broken public infrastructure">Broken public infrastructure (உடைந்த பொது உள்கட்டமைப்பு)</option>
+                <option value="Fallen trees and road obstructions">Fallen trees and road obstructions (விழுந்த மரங்கள்)</option>
+                <option value="Other civic issues">Other civic issues (இதர பொதுக் குறைகள்)</option>
+                <option value="Unknown / unrecognized">Unknown / unrecognized (அடையாளம் தெரியாதவை)</option>
               </select>
             </div>
             <div className="col-md-6">
-              <label className="gov-label small">
-                {lang === 'ta' ? 'முன்னுரிமை' : 'Priority'}
+              <label className="gov-label small d-flex justify-content-between">
+                <span>{lang === 'ta' ? 'முன்னுரிமை / அவசரம்' : 'Severity / Emergency Level'}</span>
+                <span className="text-muted fw-normal" style={{ fontSize: '0.72rem' }}>(AI Assessed)</span>
               </label>
               <select
                 className="gov-select"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
               >
-                <option value="LOW">LOW</option>
-                <option value="MEDIUM">MEDIUM</option>
-                <option value="HIGH">HIGH</option>
-                <option value="URGENT">URGENT</option>
+                <option value="LOW">LOW - Minor, no immediate danger</option>
+                <option value="MEDIUM">MEDIUM - Needs attention, not urgent</option>
+                <option value="HIGH">HIGH - Significant damage, safety risk</option>
+                <option value="CRITICAL">CRITICAL - Immediate danger to life / safety</option>
               </select>
             </div>
           </div>

@@ -250,6 +250,49 @@ const AssignedComplaints = () => {
                     </div>
                   </div>
 
+                  {/* Uploaded Evidence Photo */}
+                  {selectedComplaint.attachments && selectedComplaint.attachments.length > 0 && (
+                    <div className="mb-3">
+                      <div className="small text-muted fw-bold mb-1">CITIZEN EVIDENCE PHOTO</div>
+                      <div className="d-flex gap-2 flex-wrap">
+                        {selectedComplaint.attachments.map((att, idx) => (
+                          <a key={idx} href={att.url} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={att.url}
+                              alt="Evidence"
+                              className="rounded border"
+                              style={{ width: '140px', height: '100px', objectFit: 'cover' }}
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AI Model Assessment Card */}
+                  {selectedComplaint.aiAnalysis && (
+                    <div className="card border-primary mb-3 shadow-sm bg-light">
+                      <div className="card-header bg-primary text-white py-1 px-3 d-flex justify-content-between align-items-center">
+                        <span className="small fw-bold">🤖 AI Model Assessment ({selectedComplaint.aiAnalysis.modelVersion || 'MobileNetV3'})</span>
+                        <span className="badge bg-light text-dark">
+                          {selectedComplaint.aiAnalysis.confidence ? `${(selectedComplaint.aiAnalysis.confidence * 100).toFixed(0)}% Match` : 'Verified'}
+                        </span>
+                      </div>
+                      <div className="card-body p-2 px-3 small">
+                        <div className="d-flex justify-content-between mb-1">
+                          <span><strong>AI Category:</strong> {selectedComplaint.aiAnalysis.predictedCategory || selectedComplaint.category}</span>
+                          <span><strong>AI Severity:</strong> <span className={`badge badge-priority-${selectedComplaint.aiAnalysis.predictedSeverity || selectedComplaint.priority}`}>{selectedComplaint.aiAnalysis.predictedSeverity || selectedComplaint.priority}</span></span>
+                        </div>
+                        {selectedComplaint.aiAnalysis.explanation && (
+                          <div className="text-muted mb-1"><strong>Explanation:</strong> {selectedComplaint.aiAnalysis.explanation}</div>
+                        )}
+                        {selectedComplaint.aiAnalysis.recommendedAction && (
+                          <div className="text-primary"><strong>Action:</strong> {selectedComplaint.aiAnalysis.recommendedAction}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {error && <div className="alert alert-danger py-2 small mb-3">{error}</div>}
 
                   {/* Decision Selection */}

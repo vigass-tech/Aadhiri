@@ -2,7 +2,7 @@ const Complaint = require('../models/Complaint');
 const Notification = require('../models/Notification');
 const Department = require('../models/Department');
 const User = require('../models/User');
-const { analyzeCivicImage } = require('../utils/aiVisionService');
+const { verifyCivicImage } = require('../utils/aiVisionService');
 
 // Helper to generate a unique Ticket ID
 const generateTicketId = async () => {
@@ -79,6 +79,24 @@ const createComplaint = async (req, res, next) => {
       type: 'COMPLAINT_SUBMITTED',
       relatedComplaint: complaint._id
     });
+
+    // Requirement 6: For HIGH and CRITICAL issues, notify Admins for immediate emergency triage
+    if (['HIGH', 'CRITICAL', 'URGENT'].includes(complaint.priority)) {
+      try {
+        const admins = await User.find({ role: { $in: ['ADMIN', 'SUPER_ADMIN'] } });
+        for (const admin of admins) {
+          await Notification.create({
+            recipient: admin._id,
+            title: `🚨 Emergency Grievance Alert (${complaint.priority})`,
+            message: `Ticket ${ticketId} [${complaint.category}] has been flagged as ${complaint.priority} severity at ${complaint.location}. Immediate inspection recommended.`,
+            type: 'EMERGENCY_ESCALATION',
+            relatedComplaint: complaint._id
+          });
+        }
+      } catch (notifErr) {
+        console.warn('Failed to send admin escalation notification:', notifErr.message);
+      }
+    }
 
     const populatedComplaint = await Complaint.findById(complaint._id)
       .populate('citizen', 'name email phone')
@@ -487,24 +505,24 @@ const deleteComplaint = async (req, res, next) => {
   }
 };
 
-// @desc    AI Vision Analyzer for Grievance Photos (Google Gemini 1.5 Flash Vision + Municipal Engine)
-// @route   POST /api/complaints/ai-analyze
-// @access  Private (CITIZEN, all authenticated)
-const analyzeCivicImageAI = async (req, res, next) => {
+// @desc    Verify and classify civic grievance photo using AI / Machine Learning
+// @route   POST /api/complaints/verify-image or POST /api/complaints/ai-analyze
+// @access  Private (All authenticated users)
+const verifyComplaintImage = async (req, res, next) => {
   try {
     const { image, hintCategory, userNotes } = req.body;
 
     if (!image) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide an image for AI analysis.'
+        message: 'Please provide an image payload for AI verification.'
       });
     }
 
-    // Call Civic AI Vision Service (Google Gemini 1.5 Flash or Fallback Municipal Engine)
-    const analysis = await analyzeCivicImage(image, hintCategory, userNotes);
+    // Call Multi-Task Civic Verification & Severity Triage Service
+    const analysis = await verifyCivicImage(image, hintCategory, userNotes);
 
-    // Lookup corresponding department ID if available
+    // Lookup corresponding department ID in MongoDB
     let dept = null;
     if (analysis.departmentCode) {
       dept = await Department.findOne({ code: analysis.departmentCode });
@@ -513,23 +531,86 @@ const analyzeCivicImageAI = async (req, res, next) => {
     res.status(200).json({
       success: true,
       analysis: {
-        isCivicIssue: analysis.isCivicIssue !== false,
-        detectedIssue: analysis.detectedIssue,
-        detectedIssueTa: analysis.detectedIssueTa,
-        detectedContent: analysis.detectedContent || null,
-        validationMessageEn: analysis.validationMessageEn || null,
-        validationMessageTa: analysis.validationMessageTa || null,
-        category: analysis.category || null,
-        suggestedPriority: analysis.suggestedPriority || null,
-        emergencyReasonEn: analysis.emergencyReasonEn || null,
-        emergencyReasonTa: analysis.emergencyReasonTa || null,
-        department: dept ? dept._id : null,
-        departmentName: dept ? `${dept.name} (${dept.code})` : analysis.departmentCode,
-        statementEn: analysis.statementEn || '',
-        statementTa: analysis.statementTa || '',
+        isValidCivicIssue: analysis.isValidCivicIssue !== false,
+        category: analysis.category,
+        severity: analysis.severity,
         confidence: analysis.confidence,
-        aiProvider: analysis.aiProvider
+        explanation: analysis.explanation,
+        recommendedAction: analysis.recommendedAction,
+        detectedIssue: analysis.detectedIssue || analysis.category,
+        detectedIssueTa: analysis.detectedIssueTa || analysis.detectedIssue || analysis.category,
+        statementEn: analysis.statementEn || analysis.explanation || '',
+        statementTa: analysis.statementTa || '',
+        department: dept ? dept._id : null,
+        departmentName: dept ? `${dept.name} (${dept.code})` : analysis.departmentName,
+        isLowConfidence: Boolean(analysis.isLowConfidence),
+        requiresManualReview: Boolean(analysis.requiresManualReview),
+        aiProvider: analysis.aiProvider || 'AADHIRAI Machine Learning Vision Engine'
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Staff override for AI assessment (Human-in-the-Loop Review)
+// @route   PATCH /api/complaints/:id/override-ai
+// @access  Private (SUPER_ADMIN, ADMIN, REVIEWER)
+const overrideAIAssessment = async (req, res, next) => {
+  try {
+    const { verifiedCategory, verifiedSeverity, reviewNotes } = req.body;
+
+    const complaint = await Complaint.findById(req.params.id);
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found.'
+      });
+    }
+
+    if (!verifiedCategory || !verifiedSeverity) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide both verifiedCategory and verifiedSeverity.'
+      });
+    }
+
+    // Save human override while preserving original AI prediction
+    complaint.humanReview = {
+      isOverridden: true,
+      verifiedCategory,
+      verifiedSeverity,
+      reviewedBy: req.user._id,
+      reviewedAt: new Date(),
+      reviewNotes: reviewNotes ? reviewNotes.trim() : ''
+    };
+
+    // Update active category and priority
+    complaint.category = verifiedCategory;
+    complaint.priority = verifiedSeverity;
+
+    // Record in timeline history
+    complaint.statusHistory.push({
+      previousStatus: complaint.status,
+      newStatus: complaint.status,
+      updatedBy: req.user._id,
+      userRole: req.user.role,
+      remarks: `Human Verification Override: Category set to "${verifiedCategory}", Severity set to "${verifiedSeverity}". Notes: ${reviewNotes || 'None'}`,
+      timestamp: new Date()
+    });
+
+    await complaint.save();
+
+    const updated = await Complaint.findById(complaint._id)
+      .populate('citizen', 'name email phone')
+      .populate('department', 'name code')
+      .populate('assignedReviewer', 'name email')
+      .populate('humanReview.reviewedBy', 'name role');
+
+    res.status(200).json({
+      success: true,
+      message: 'Human verification and override recorded successfully.',
+      complaint: updated
     });
   } catch (error) {
     next(error);
@@ -545,6 +626,8 @@ module.exports = {
   updateComplaintStatus,
   updateComplaint,
   deleteComplaint,
-  analyzeCivicImageAI
+  verifyComplaintImage,
+  analyzeCivicImageAI: verifyComplaintImage, // backwards compatible alias
+  overrideAIAssessment
 };
 

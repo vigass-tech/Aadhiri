@@ -41,6 +41,12 @@ const AdminComplaints = () => {
   const [statusRemarks, setStatusRemarks] = useState('');
   const [resolutionRemarks, setResolutionRemarks] = useState('');
 
+  // Human-in-the-Loop AI Override State
+  const [overrideCat, setOverrideCat] = useState('Potholes and damaged roads');
+  const [overrideSev, setOverrideSev] = useState('HIGH');
+  const [overrideNotes, setOverrideNotes] = useState('');
+  const [overrideSaving, setOverrideSaving] = useState(false);
+
   const [success, setSuccess] = useState('');
 
   const fetchData = async () => {
@@ -83,14 +89,46 @@ const AdminComplaints = () => {
     try {
       const res = await api.get(`/complaints/${complaint._id}`);
       if (res.data.success) {
-        setSelectedComplaint(res.data.complaint);
+        const c = res.data.complaint;
+        setSelectedComplaint(c);
+        setOverrideCat(c.humanReview?.verifiedCategory || c.category || 'Potholes and damaged roads');
+        setOverrideSev(c.humanReview?.verifiedSeverity || c.priority || 'HIGH');
+        setOverrideNotes(c.humanReview?.reviewNotes || '');
       } else {
         setSelectedComplaint(complaint);
+        setOverrideCat(complaint.category || 'Potholes and damaged roads');
+        setOverrideSev(complaint.priority || 'HIGH');
+        setOverrideNotes('');
       }
     } catch (err) {
       setSelectedComplaint(complaint);
+      setOverrideCat(complaint.category || 'Potholes and damaged roads');
+      setOverrideSev(complaint.priority || 'HIGH');
+      setOverrideNotes('');
     }
     setShowDetailModal(true);
+  };
+
+  const handleOverrideAI = async (e) => {
+    e.preventDefault();
+    if (!selectedComplaint) return;
+    setOverrideSaving(true);
+    try {
+      const res = await api.patch(`/complaints/${selectedComplaint._id}/override-ai`, {
+        verifiedCategory: overrideCat,
+        verifiedSeverity: overrideSev,
+        reviewNotes: overrideNotes
+      });
+      if (res.data.success) {
+        setSelectedComplaint(res.data.complaint);
+        setSuccess(`Staff verification recorded for ticket ${res.data.complaint.ticketId}`);
+        fetchData();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to record verification override.');
+    } finally {
+      setOverrideSaving(false);
+    }
   };
 
   const openAssignModal = (complaint) => {
@@ -333,6 +371,130 @@ const AdminComplaints = () => {
                       <div className="fw-semibold text-dark mt-1">{selectedComplaint.location}</div>
                       <div className="small text-muted">{selectedComplaint.address || 'No landmark specified'}</div>
                     </div>
+                  </div>
+                </div>
+
+                {/* Evidence Photo Attachments */}
+                {selectedComplaint.attachments && selectedComplaint.attachments.length > 0 && (
+                  <div className="mb-4">
+                    <div className="small text-muted fw-bold mb-2">UPLOADED CITIZEN EVIDENCE PHOTO</div>
+                    <div className="d-flex gap-2 flex-wrap">
+                      {selectedComplaint.attachments.map((att, idx) => (
+                        <a key={idx} href={att.url} target="_blank" rel="noopener noreferrer" className="d-inline-block">
+                          <img
+                            src={att.url}
+                            alt="Grievance Evidence"
+                            className="rounded border shadow-sm"
+                            style={{ width: '160px', height: '120px', objectFit: 'cover' }}
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Machine Learning Verification Card */}
+                {selectedComplaint.aiAnalysis && (
+                  <div className="card border-primary mb-4 shadow-sm" style={{ backgroundColor: '#f8fafc' }}>
+                    <div className="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">
+                      <span className="small fw-bold">
+                        🤖 AI Model Assessment ({selectedComplaint.aiAnalysis.modelVersion || 'MobileNetV3-Civic'})
+                      </span>
+                      <span className="badge bg-light text-dark">
+                        {selectedComplaint.aiAnalysis.confidence ? `${(selectedComplaint.aiAnalysis.confidence * 100).toFixed(0)}% Confidence` : 'Verified'}
+                      </span>
+                    </div>
+                    <div className="card-body p-3">
+                      <div className="row g-2 mb-2 small">
+                        <div className="col-sm-6">
+                          <strong>AI Predicted Category:</strong> <span className="text-primary fw-semibold">{selectedComplaint.aiAnalysis.predictedCategory || selectedComplaint.category}</span>
+                        </div>
+                        <div className="col-sm-6">
+                          <strong>AI Predicted Severity:</strong>{' '}
+                          <span className={`badge badge-priority-${selectedComplaint.aiAnalysis.predictedSeverity || selectedComplaint.priority}`}>
+                            {selectedComplaint.aiAnalysis.predictedSeverity || selectedComplaint.priority}
+                          </span>
+                        </div>
+                      </div>
+                      {selectedComplaint.aiAnalysis.explanation && (
+                        <div className="small text-dark mb-1">
+                          <strong>AI Explanation:</strong> {selectedComplaint.aiAnalysis.explanation}
+                        </div>
+                      )}
+                      {selectedComplaint.aiAnalysis.recommendedAction && (
+                        <div className="small text-muted">
+                          <strong>Recommended Action:</strong> {selectedComplaint.aiAnalysis.recommendedAction}
+                        </div>
+                      )}
+                      {selectedComplaint.aiAnalysis.isLowConfidence && (
+                        <div className="alert alert-warning py-1 px-2 small mt-2 mb-0">
+                          ⚠️ Low confidence prediction — requires human staff verification.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Human Staff Verification & Override Panel */}
+                <div className="card border mb-4">
+                  <div className="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+                    <span className="small fw-bold">🧑‍💼 Human Staff Verification & Override</span>
+                    {selectedComplaint.humanReview?.isOverridden ? (
+                      <span className="badge bg-success">✓ Verified by Staff</span>
+                    ) : (
+                      <span className="badge bg-warning text-dark">Pending Staff Review</span>
+                    )}
+                  </div>
+                  <div className="card-body p-3">
+                    {selectedComplaint.humanReview?.isOverridden && (
+                      <div className="alert alert-success py-2 px-3 small mb-3">
+                        <div className="fw-bold mb-1">Current Human-Verified Record:</div>
+                        <div>Category: <strong>{selectedComplaint.humanReview.verifiedCategory}</strong> | Severity: <strong>{selectedComplaint.humanReview.verifiedSeverity}</strong></div>
+                        {selectedComplaint.humanReview.reviewNotes && <div>Notes: {selectedComplaint.humanReview.reviewNotes}</div>}
+                        <div className="text-muted mt-1" style={{ fontSize: '0.72rem' }}>
+                          Recorded by {selectedComplaint.humanReview.reviewedBy?.name || 'Authorized Officer'} on {new Date(selectedComplaint.humanReview.reviewedAt).toLocaleString()}
+                        </div>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleOverrideAI}>
+                      <div className="row g-2 mb-2">
+                        <div className="col-sm-6">
+                          <label className="form-label small mb-1 fw-semibold">Override Category</label>
+                          <select className="form-select form-select-sm" value={overrideCat} onChange={(e) => setOverrideCat(e.target.value)}>
+                            <option value="Potholes and damaged roads">Potholes and damaged roads</option>
+                            <option value="Garbage and illegal dumping">Garbage and illegal dumping</option>
+                            <option value="Overflowing drainage and sewage">Overflowing drainage and sewage</option>
+                            <option value="Water leakage and waterlogging">Water leakage and waterlogging</option>
+                            <option value="Damaged streetlights">Damaged streetlights</option>
+                            <option value="Broken public infrastructure">Broken public infrastructure</option>
+                            <option value="Fallen trees and road obstructions">Fallen trees and road obstructions</option>
+                            <option value="Other civic issues">Other civic issues</option>
+                          </select>
+                        </div>
+                        <div className="col-sm-6">
+                          <label className="form-label small mb-1 fw-semibold">Override Severity</label>
+                          <select className="form-select form-select-sm" value={overrideSev} onChange={(e) => setOverrideSev(e.target.value)}>
+                            <option value="LOW">LOW</option>
+                            <option value="MEDIUM">MEDIUM</option>
+                            <option value="HIGH">HIGH</option>
+                            <option value="CRITICAL">CRITICAL</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="mb-2">
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          placeholder="Staff verification notes (e.g. Field inspection confirmed level 3 asphalt crater)..."
+                          value={overrideNotes}
+                          onChange={(e) => setOverrideNotes(e.target.value)}
+                        />
+                      </div>
+                      <button type="submit" className="btn btn-sm btn-outline-primary" disabled={overrideSaving}>
+                        {overrideSaving ? 'Saving...' : '💾 Save Staff Verification & Override'}
+                      </button>
+                    </form>
                   </div>
                 </div>
 
