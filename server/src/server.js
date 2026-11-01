@@ -29,6 +29,16 @@ connectDB();
 
 const app = express();
 
+// Ensure Database is connected for serverless invocations (e.g. Vercel)
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error('Database connection middleware error:', err);
+  }
+  next();
+});
+
 // Security HTTP headers
 app.use(helmet());
 
@@ -108,13 +118,15 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
-  console.log(`====================================================`);
-  console.log(`  AADHIRAI Backend Server running on port ${PORT}`);
-  console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`  Health Check: http://localhost:${PORT}/api/health`);
-  console.log(`====================================================`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`====================================================`);
+    console.log(`  AADHIRAI Backend Server running on port ${PORT}`);
+    console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`  Health Check: http://localhost:${PORT}/api/health`);
+    console.log(`====================================================`);
+  });
+}
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
