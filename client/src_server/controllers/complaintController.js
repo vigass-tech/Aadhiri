@@ -513,14 +513,20 @@ const analyzeCivicImageAI = async (req, res, next) => {
     res.status(200).json({
       success: true,
       analysis: {
+        isCivicIssue: analysis.isCivicIssue !== false,
         detectedIssue: analysis.detectedIssue,
         detectedIssueTa: analysis.detectedIssueTa,
-        category: analysis.category,
-        suggestedPriority: analysis.suggestedPriority,
+        detectedContent: analysis.detectedContent || null,
+        validationMessageEn: analysis.validationMessageEn || null,
+        validationMessageTa: analysis.validationMessageTa || null,
+        category: analysis.category || null,
+        suggestedPriority: analysis.suggestedPriority || null,
+        emergencyReasonEn: analysis.emergencyReasonEn || null,
+        emergencyReasonTa: analysis.emergencyReasonTa || null,
         department: dept ? dept._id : null,
         departmentName: dept ? `${dept.name} (${dept.code})` : analysis.departmentCode,
-        statementEn: analysis.statementEn,
-        statementTa: analysis.statementTa,
+        statementEn: analysis.statementEn || '',
+        statementTa: analysis.statementTa || '',
         confidence: analysis.confidence,
         aiProvider: analysis.aiProvider
       }

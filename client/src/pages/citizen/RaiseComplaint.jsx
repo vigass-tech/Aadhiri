@@ -106,6 +106,10 @@ const RaiseComplaint = () => {
       aiScanning: 'படத்தை AI ஸ்கேன் செய்து பிழை விவரத்தை உருவாக்குகிறது...',
       aiDetected: 'கண்டறியப்பட்ட குறைபாடு:',
       aiStatementLabel: 'AI உருவாக்கிய அதிகாரப்பூர்வ அறிக்கை:',
+      aiNonCivicTitle: 'செல்லுபடியாகாத புகைப்படம் – பொதுப் பிரச்சனை அல்ல',
+      aiCivicVerified: '✓ AI மூலம் சரிபார்க்கப்பட்ட பொது குறைபாடு',
+      aiEmergencyReason: 'அவசர முன்னுரிமை மதிப்பீடு:',
+      uploadAnother: 'வேறு படம் பதிவேற்றவும்',
       applyAi: 'இந்த அறிக்கையை புகாராகப் பயன்படுத்து',
       submitBtn: 'புகாரை அதிகாரப்பூர்வமாகப் பதிவு செய்க',
       submitting: 'பதிவு செய்யப்படுகிறது...',
@@ -138,6 +142,10 @@ const RaiseComplaint = () => {
       aiScanning: 'AI is analyzing photo damage & formulating statement...',
       aiDetected: 'Detected Defect:',
       aiStatementLabel: 'AI Formulated Technical Statement:',
+      aiNonCivicTitle: 'Non-Civic Image Detected (Invalid Photo)',
+      aiCivicVerified: '✓ Civic Defect Verified by AI',
+      aiEmergencyReason: 'Emergency Priority Assessment:',
+      uploadAnother: 'Upload Another Photo',
       applyAi: 'Apply AI Statement to Complaint',
       submitBtn: 'Submit Official Grievance',
       submitting: 'Registering...',
@@ -367,14 +375,17 @@ const RaiseComplaint = () => {
 
       if (res.data.success) {
         setAiStatement(res.data.analysis);
-        if (res.data.analysis.category) {
-          setCategory(res.data.analysis.category);
-        }
-        if (res.data.analysis.suggestedPriority) {
-          setPriority(res.data.analysis.suggestedPriority);
-        }
-        if (res.data.analysis.department) {
-          setDepartmentId(res.data.analysis.department);
+        // Only auto-populate fields if AI verified that this is a genuine civic issue
+        if (res.data.analysis.isCivicIssue) {
+          if (res.data.analysis.category) {
+            setCategory(res.data.analysis.category);
+          }
+          if (res.data.analysis.suggestedPriority) {
+            setPriority(res.data.analysis.suggestedPriority);
+          }
+          if (res.data.analysis.department) {
+            setDepartmentId(res.data.analysis.department);
+          }
         }
       }
     } catch (err) {
@@ -385,9 +396,11 @@ const RaiseComplaint = () => {
   };
 
   const applyAIStatement = () => {
-    if (!aiStatement) return;
+    if (!aiStatement || !aiStatement.isCivicIssue) return;
     const stmt = lang === 'ta' ? aiStatement.statementTa : aiStatement.statementEn;
-    setDescription(stmt);
+    if (stmt) {
+      setDescription(stmt);
+    }
     if (aiStatement.category) {
       setCategory(aiStatement.category);
     }
@@ -406,6 +419,15 @@ const RaiseComplaint = () => {
 
     if (!description.trim()) {
       setError(lang === 'ta' ? 'தயவுசெய்து புகார் விவரத்தை உள்ளிடவும்.' : 'Please provide complaint details.');
+      return;
+    }
+
+    if (aiStatement && !aiStatement.isCivicIssue) {
+      setError(
+        lang === 'ta'
+          ? 'பதிவேற்றப்பட்ட படம் பொது குறைபாடு அல்ல என AI கண்டறிந்துள்ளது. தயவுசெய்து பொது உள்கட்டமைப்பு சேத புகைப்படத்தை பதிவேற்றவும்.'
+          : 'The uploaded photo was flagged as non-civic content. Please upload a photo of genuine public infrastructure damage or remove the photo.'
+      );
       return;
     }
 
@@ -715,14 +737,67 @@ const RaiseComplaint = () => {
             </div>
           )}
 
-          {aiStatement && (
+          {/* 6A. Non-Civic Image Rejection Box */}
+          {aiStatement && !aiStatement.isCivicIssue && (
+            <div
+              className="p-4 rounded-3 border mb-4 shadow-sm"
+              style={{ backgroundColor: '#fff7ed', borderColor: '#fdba74' }}
+            >
+              <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                <span className="fw-bold text-danger d-flex align-items-center gap-2 small">
+                  <AlertCircle size={18} className="text-danger flex-shrink-0" />
+                  {t.aiNonCivicTitle}
+                </span>
+                {aiStatement.aiProvider && (
+                  <span className="badge bg-secondary bg-opacity-75" style={{ fontSize: '0.68rem' }}>
+                    {aiStatement.aiProvider}
+                  </span>
+                )}
+              </div>
+
+              <div className="p-3 bg-white rounded border border-warning mb-3 text-dark small" style={{ lineHeight: 1.6 }}>
+                <div className="text-danger fw-semibold mb-1">
+                  {lang === 'ta'
+                    ? aiStatement.validationMessageTa || 'இந்த படம் நகராட்சி அல்லது பொது உள்கட்டமைப்பு குறைபாட்டை காட்டவில்லை.'
+                    : aiStatement.validationMessageEn || 'This photo does not depict any municipal grievance or public infrastructure defect.'}
+                </div>
+                {aiStatement.detectedContent && (
+                  <div className="text-muted small mt-2 pt-1 border-top">
+                    <strong>{lang === 'ta' ? 'கண்டறியப்பட்ட பொருள் / உள்ளடக்கம்:' : 'Detected Subject in Photo:'}</strong>{' '}
+                    <span className="badge bg-light text-dark border ms-1">{aiStatement.detectedContent}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <span className="text-muted" style={{ fontSize: '0.8rem' }}>
+                  {lang === 'ta'
+                    ? '⚠️ சாலை குழி, குடிநீர் கசிவு, குப்பை, தெருவிளக்கு அல்லது சாக்கடை சேதங்களை மட்டுமே AI ஆய்வு செய்யும்.'
+                    : '⚠️ AI only validates public defects: potholes, water leaks, garbage heaps, streetlights, or sewage.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImagePreview(null);
+                    setAiStatement(null);
+                  }}
+                  className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1 shadow-sm px-3 py-1"
+                >
+                  <X size={14} /> {t.uploadAnother}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 6B. Validated Civic Defect & Emergency Triage Box */}
+          {aiStatement && aiStatement.isCivicIssue && (
             <div
               className="p-4 rounded-3 border mb-4 shadow-sm"
               style={{ backgroundColor: '#f0fdf4', borderColor: '#86efac' }}
             >
               <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
                 <span className="fw-bold text-success d-flex align-items-center gap-1 small">
-                  <Sparkles size={16} /> {t.aiTitle}
+                  <Sparkles size={16} /> {t.aiCivicVerified}
                   {aiStatement.aiProvider && (
                     <span className="badge bg-dark bg-opacity-75 ms-1" style={{ fontSize: '0.68rem' }}>
                       {aiStatement.aiProvider}
@@ -736,6 +811,33 @@ const RaiseComplaint = () => {
                   {lang === 'ta' ? aiStatement.detectedIssueTa : aiStatement.detectedIssue}
                 </span>
               </div>
+
+              {/* Priority & Emergency Rating Reason */}
+              {(aiStatement.emergencyReasonEn || aiStatement.emergencyReasonTa) && (
+                <div
+                  className="p-2 px-3 rounded mb-2 small d-flex align-items-center gap-2"
+                  style={{
+                    backgroundColor:
+                      aiStatement.suggestedPriority === 'URGENT'
+                        ? '#fee2e2'
+                        : aiStatement.suggestedPriority === 'HIGH'
+                        ? '#ffedd5'
+                        : '#eff6ff',
+                    borderLeft: `4px solid ${
+                      aiStatement.suggestedPriority === 'URGENT'
+                        ? '#dc2626'
+                        : aiStatement.suggestedPriority === 'HIGH'
+                        ? '#ea580c'
+                        : '#2563eb'
+                    }`
+                  }}
+                >
+                  <span className="fw-bold text-dark">{t.aiEmergencyReason}</span>
+                  <span className="text-dark">
+                    {lang === 'ta' ? aiStatement.emergencyReasonTa : aiStatement.emergencyReasonEn}
+                  </span>
+                </div>
+              )}
 
               <div className="small text-muted mb-2">
                 <strong>{t.aiStatementLabel}</strong>
