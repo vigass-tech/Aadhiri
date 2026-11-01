@@ -386,8 +386,24 @@ Return ONLY this JSON object:
 /**
  * Main Civic Image AI Verification & Triage Engine
  */
-const verifyCivicImage = async (image, hintCategory = '', userNotes = '') => {
-  // 1. Validate image format and size
+const verifyCivicImage = async (image, hintCategory = '', userNotes = '', options = {}) => {
+  // 1. Check if client pre-detector identified a document, schematic, or screenshot
+  if (options && options.isDocument) {
+    return {
+      isValidCivicIssue: false,
+      category: "Unknown / unrecognized",
+      severity: "LOW",
+      confidence: 0.98,
+      detectedContent: "Technical Diagram / Schematic / Document",
+      explanation: "The uploaded file was identified as a technical document, circuit diagram, or text screenshot. Only real on-site photographs of public municipal infrastructure defects are accepted.",
+      recommendedAction: "Please capture an authentic on-site photograph of the civic defect using the Live Geo-tagged Camera.",
+      isLowConfidence: false,
+      requiresManualReview: false,
+      aiProvider: "AADHIRAI Geo-Vision Validator"
+    };
+  }
+
+  // 2. Validate image format and size
   const validation = validateImageFormatAndSize(image);
   if (!validation.valid) {
     return {
@@ -413,24 +429,24 @@ const verifyCivicImage = async (image, hintCategory = '', userNotes = '') => {
     }
   }
 
-  // 2. Try Python MobileNetV3 ML microservice if active
+  // 3. Try Python MobileNetV3 ML microservice if active
   const mlServiceResult = await callPythonMLService(image, hintCategory, userNotes);
   if (mlServiceResult) return mlServiceResult;
 
-  // 3. Try Google Gemini Vision if API key is present
+  // 4. Try Google Gemini Vision if API key is present
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (apiKey && base64Data) {
     const geminiResult = await callGeminiVision(base64Data, mimeType, apiKey);
     if (geminiResult) return geminiResult;
   }
 
-  // 4. Embedded High-Precision Civic Classifier
-  const combinedNotes = `${hintCategory || ''} ${userNotes || ''}`.toLowerCase().trim();
+  // 5. Embedded High-Precision Civic Classifier
+  const userText = (userNotes || '').toLowerCase().trim();
 
   // Check non-civic blacklist
   const isExplicitlyNonCivic = NON_CIVIC_PATTERNS.some((pattern) => {
     const regex = new RegExp(`\\b${pattern}\\b`, 'i');
-    return regex.test(combinedNotes);
+    return regex.test(userText);
   });
 
   if (isExplicitlyNonCivic) {
@@ -440,7 +456,7 @@ const verifyCivicImage = async (image, hintCategory = '', userNotes = '') => {
       severity: "LOW",
       confidence: 0.95,
       detectedContent: "Non-Civic Subject Detected",
-      explanation: "Image details indicate non-civic content (e.g., portrait, personal item, pet, or food).",
+      explanation: "Image details indicate non-civic content (e.g., portrait, personal item, pet, document, or food).",
       recommendedAction: "Attach a photo depicting a genuine municipal infrastructure defect (roads, water, garbage, lighting).",
       isLowConfidence: false,
       requiresManualReview: false,
@@ -448,21 +464,32 @@ const verifyCivicImage = async (image, hintCategory = '', userNotes = '') => {
     };
   }
 
-  // Match civic defect profile
+  // Match civic defect profile strictly from user-provided civic keywords
   let matched = null;
-  for (const profile of CIVIC_DEFECT_TAXONOMY) {
-    if (profile.patterns.some((p) => combinedNotes.includes(p))) {
-      matched = profile;
-      break;
+  if (userText) {
+    for (const profile of CIVIC_DEFECT_TAXONOMY) {
+      if (profile.patterns.some((p) => userText.includes(p))) {
+        matched = profile;
+        break;
+      }
     }
   }
 
-  if (!matched && hintCategory) {
-    matched = CIVIC_DEFECT_TAXONOMY.find((p) => p.category.toLowerCase().includes(hintCategory.toLowerCase()));
-  }
-
+  // If no matching civic defect was identified from notes, and no external AI is running:
+  // Strictly return invalid/unrecognized rather than falsely claiming it's a pothole!
   if (!matched) {
-    matched = CIVIC_DEFECT_TAXONOMY[0]; // Potholes
+    return {
+      isValidCivicIssue: false,
+      category: "Unknown / unrecognized",
+      severity: "LOW",
+      confidence: 0.92,
+      detectedContent: "Unverified Content / Non-Civic Subject",
+      explanation: "No confirmed municipal civic defect detected in this image. Technical diagrams, indoor items, screenshots, and non-infrastructure photos are rejected.",
+      recommendedAction: "Please capture a clear, on-site Geo-tagged photo of the actual damaged road, water leak, garbage heap, or broken streetlight.",
+      isLowConfidence: false,
+      requiresManualReview: false,
+      aiProvider: "AADHIRAI Geo-Vision Validator"
+    };
   }
 
   const confidence = 0.94;

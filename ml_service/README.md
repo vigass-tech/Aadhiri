@@ -71,3 +71,4 @@ API Docs available at: `http://localhost:8000/docs`
 
 ## 4. Production MERN Integration
 The AADHIRAI Express backend checks for the presence of `ML_SERVICE_URL=http://localhost:8000/verify-image`. When online, it routes directly to this PyTorch service; when running serverless on Vercel or when Python is offline, the backend executes the self-contained multimodal vision engine without missing a beat!
+

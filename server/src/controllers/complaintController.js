@@ -510,7 +510,7 @@ const deleteComplaint = async (req, res, next) => {
 // @access  Private (All authenticated users)
 const verifyComplaintImage = async (req, res, next) => {
   try {
-    const { image, hintCategory, userNotes } = req.body;
+    const { image, hintCategory, userNotes, isDocument } = req.body;
 
     if (!image) {
       return res.status(400).json({
@@ -520,7 +520,7 @@ const verifyComplaintImage = async (req, res, next) => {
     }
 
     // Call Multi-Task Civic Verification & Severity Triage Service
-    const analysis = await verifyCivicImage(image, hintCategory, userNotes);
+    const analysis = await verifyCivicImage(image, hintCategory, userNotes, { isDocument });
 
     // Lookup corresponding department ID in MongoDB
     let dept = null;

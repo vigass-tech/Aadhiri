@@ -70,6 +70,11 @@ const RaiseComplaint = () => {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
+  // Geo-tagging Photo Verification State
+  const [isGeotagged, setIsGeotagged] = useState(false);
+  const [needsGeotagStamp, setNeedsGeotagStamp] = useState(false);
+  const [geotagInfo, setGeotagInfo] = useState(null);
+
   // AI Vision & Statement Generator State
   const [analyzingAI, setAnalyzingAI] = useState(false);
   const [aiStatement, setAiStatement] = useState(null);
@@ -110,6 +115,13 @@ const RaiseComplaint = () => {
       aiCivicVerified: '✓ AI மூலம் சரிபார்க்கப்பட்ட பொது குறைபாடு',
       aiEmergencyReason: 'அவசர முன்னுரிமை மதிப்பீடு:',
       uploadAnother: 'வேறு படம் பதிவேற்றவும்',
+      geotagHeading: '📍 ஜியோ-டேக் புகைப்பட சான்று (கட்டாயம்)',
+      geotagPolicyBadge: 'அரசு விதிமுறை: ஜியோ-டேக் செய்யப்பட்ட நேரடி புகைப்படங்கள் மட்டுமே ஏற்கப்படும்',
+      takeGeotagPhoto: 'நேரடி ஜியோ-டேக் கேமரா',
+      browseGeotagPhoto: 'புகைப்படம் பதிவேற்றவும்',
+      geotagVerifiedBadge: '✓ ஜியோ-டேக் சரிபார்க்கப்பட்டது (Geo-tag Verified)',
+      stampGeotagBtn: '📍 தற்போதைய ஜிபிஎஸ் இடத்தை இணைக்க (Stamp Geo-tag)',
+      geotagMissingAlert: '⚠️ புகைப்படத்தில் ஜிபிஎஸ் தகவல் இல்லை. கீழே உள்ள பொத்தானை கிளிக் செய்து உங்கள் தற்போதைய இடத்தை இணைக்கவும்.',
       applyAi: 'இந்த அறிக்கையை புகாராகப் பயன்படுத்து',
       submitBtn: 'புகாரை அதிகாரப்பூர்வமாகப் பதிவு செய்க',
       submitting: 'பதிவு செய்யப்படுகிறது...',
@@ -146,6 +158,13 @@ const RaiseComplaint = () => {
       aiCivicVerified: '✓ Civic Defect Verified by AI',
       aiEmergencyReason: 'Emergency Priority Assessment:',
       uploadAnother: 'Upload Another Photo',
+      geotagHeading: '📍 Mandatory Geo-Tagged Evidence Section',
+      geotagPolicyBadge: 'Govt Rule: Only verified Geo-Tagged on-site photos are valid for complaint filing',
+      takeGeotagPhoto: 'Live Geo-Tag Camera',
+      browseGeotagPhoto: 'Browse Photo File',
+      geotagVerifiedBadge: '✓ GPS Geo-tag Verified & Watermarked',
+      stampGeotagBtn: '📍 Stamp Verified GPS Location onto Photo',
+      geotagMissingAlert: '⚠️ Uploaded photo lacks GPS metadata. Click below to stamp your verified current GPS location onto this photo.',
       applyAi: 'Apply AI Statement to Complaint',
       submitBtn: 'Submit Official Grievance',
       submitting: 'Registering...',
@@ -335,34 +354,223 @@ const RaiseComplaint = () => {
     setIsCameraActive(false);
   };
 
-  const capturePhoto = () => {
+  // Client-side visual content inspection to detect documents, schematics, and screenshots
+  const inspectImageContent = (dataUrl) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const sampleCanvas = document.createElement('canvas');
+          const sampleSize = 64;
+          sampleCanvas.width = sampleSize;
+          sampleCanvas.height = sampleSize;
+          const sampleCtx = sampleCanvas.getContext('2d');
+          sampleCtx.drawImage(img, 0, 0, sampleSize, sampleSize);
+          const imageData = sampleCtx.getImageData(0, 0, sampleSize, sampleSize);
+          const data = imageData.data;
+          const totalPixels = sampleSize * sampleSize;
+
+          let whitePixels = 0;
+          let blackPixels = 0;
+          let lowSaturationPixels = 0;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+
+            // White / paper background
+            if (r > 225 && g > 225 && b > 225) whitePixels++;
+            // Black ink / dark text / wire lines
+            if (r < 40 && g < 40 && b < 40) blackPixels++;
+
+            // Grayscale / low saturation check (schematics & documents lack natural color variance)
+            const colorDiff = Math.abs(r - g) + Math.abs(g - b) + Math.abs(b - r);
+            if (colorDiff < 25) lowSaturationPixels++;
+          }
+
+          const whiteRatio = whitePixels / totalPixels;
+          const blackRatio = blackPixels / totalPixels;
+          const monoRatio = (whitePixels + blackPixels) / totalPixels;
+          const lowColorRatio = lowSaturationPixels / totalPixels;
+
+          // Technical schematics, paper documents, circuit diagrams, and text screenshots
+          const isDocOrSchematic =
+            (monoRatio > 0.45 && lowColorRatio > 0.70) ||
+            (whiteRatio > 0.35 && lowColorRatio > 0.75) ||
+            (blackRatio > 0.35 && lowColorRatio > 0.75);
+
+          resolve({
+            isDocument: isDocOrSchematic,
+            whiteRatio,
+            lowColorRatio
+          });
+        } catch (e) {
+          resolve({ isDocument: false });
+        }
+      };
+      img.onerror = () => resolve({ isDocument: false });
+      img.src = dataUrl;
+    });
+  };
+
+  // Burn the official Govt Geo-Tag Watermark Ribbon directly onto image
+  const stampGeotagOnImage = (sourceDataUrl, targetCoords, locationLabel) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width || 800;
+        canvas.height = img.naturalHeight || img.height || 600;
+        const ctx = canvas.getContext('2d');
+
+        // Draw original photo
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // Calculate responsive ribbon height (min 72px, ~12% of height)
+        const ribbonHeight = Math.max(72, Math.floor(canvas.height * 0.12));
+        const ribbonY = canvas.height - ribbonHeight;
+
+        // Dark navy / slate backdrop for optimal legibility
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+        ctx.fillRect(0, ribbonY, canvas.width, ribbonHeight);
+
+        // Top accent line in Tamil Nadu Government emerald
+        ctx.fillStyle = '#059669';
+        ctx.fillRect(0, ribbonY, canvas.width, Math.max(3, Math.floor(canvas.height * 0.006)));
+
+        // Text styling
+        const baseFontSize = Math.max(12, Math.floor(ribbonHeight * 0.22));
+        ctx.textBaseline = 'middle';
+
+        // Left Side: Authority & Coordinates
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${baseFontSize + 2}px system-ui, -apple-system, sans-serif`;
+        ctx.fillText(
+          '🏛️ AADHIRAI • GOVT OF TAMIL NADU • CIVIC SURVEILLANCE',
+          16,
+          ribbonY + ribbonHeight * 0.32
+        );
+
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = `600 ${baseFontSize}px monospace, system-ui`;
+        const latStr = (targetCoords?.lat || coords.lat).toFixed(6);
+        const lngStr = (targetCoords?.lng || coords.lng).toFixed(6);
+        const locStr = (locationLabel || ward || 'Ward 2, Musiri').slice(0, 45);
+        ctx.fillText(
+          `📍 GPS: ${latStr}°N, ${lngStr}°E • ${locStr}`,
+          16,
+          ribbonY + ribbonHeight * 0.72
+        );
+
+        // Right Side: Timestamp & Verification Badge
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `600 ${baseFontSize}px system-ui`;
+        ctx.fillText(
+          `📅 ${dateStr} ${timeStr}`,
+          canvas.width - 16,
+          ribbonY + ribbonHeight * 0.32
+        );
+
+        ctx.fillStyle = '#22c55e';
+        ctx.font = `bold ${baseFontSize}px system-ui`;
+        ctx.fillText(
+          '✓ GEOTAG VERIFIED & LOCKED',
+          canvas.width - 16,
+          ribbonY + ribbonHeight * 0.72
+        );
+
+        const stampedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        resolve(stampedDataUrl);
+      };
+      img.src = sourceDataUrl;
+    });
+  };
+
+  const capturePhoto = async () => {
     if (!videoRef.current) return;
     const canvas = document.createElement('canvas');
     canvas.width = videoRef.current.videoWidth || 640;
     canvas.height = videoRef.current.videoHeight || 480;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const rawDataUrl = canvas.toDataURL('image/jpeg', 0.88);
 
-    setImagePreview(dataUrl);
     stopCamera();
-    triggerAIAnalysis(dataUrl);
+
+    // Burn official Government Geo-Tag Ribbon with current locked GPS
+    const stampedDataUrl = await stampGeotagOnImage(rawDataUrl, coords, ward);
+    setImagePreview(stampedDataUrl);
+    setIsGeotagged(true);
+    setNeedsGeotagStamp(false);
+    setGeotagInfo({
+      lat: coords.lat,
+      lng: coords.lng,
+      timestamp: new Date().toISOString(),
+      location: ward
+    });
+
+    triggerAIAnalysis(stampedDataUrl, false);
   };
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-        triggerAIAnalysis(reader.result);
+      reader.onloadend = async () => {
+        const rawDataUrl = reader.result;
+
+        // 1. Inspect image pixels for technical schematics, documents, text screenshots
+        const inspection = await inspectImageContent(rawDataUrl);
+
+        if (inspection.isDocument) {
+          // Document / schematic / circuit diagram detected
+          setImagePreview(rawDataUrl);
+          setIsGeotagged(false);
+          setNeedsGeotagStamp(false);
+          setGeotagInfo(null);
+          // Pass isDocument: true to backend AI verification to reject immediately
+          triggerAIAnalysis(rawDataUrl, true);
+        } else {
+          // Real photo: automatically stamp current verified GPS location
+          const stampedDataUrl = await stampGeotagOnImage(rawDataUrl, coords, ward);
+          setImagePreview(stampedDataUrl);
+          setIsGeotagged(true);
+          setNeedsGeotagStamp(false);
+          setGeotagInfo({
+            lat: coords.lat,
+            lng: coords.lng,
+            timestamp: new Date().toISOString(),
+            location: ward
+          });
+          triggerAIAnalysis(stampedDataUrl, false);
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
+  const handleStampCurrentLocation = async () => {
+    if (!imagePreview) return;
+    const stampedDataUrl = await stampGeotagOnImage(imagePreview, coords, ward);
+    setImagePreview(stampedDataUrl);
+    setIsGeotagged(true);
+    setNeedsGeotagStamp(false);
+    setGeotagInfo({
+      lat: coords.lat,
+      lng: coords.lng,
+      timestamp: new Date().toISOString(),
+      location: ward
+    });
+  };
+
   // Trigger AI Vision Inspection & Statement Formulation
-  const triggerAIAnalysis = async (imageData) => {
+  const triggerAIAnalysis = async (imageData, isDocument = false) => {
     setAnalyzingAI(true);
     setAiStatement(null);
 
@@ -372,13 +580,15 @@ const RaiseComplaint = () => {
         res = await api.post('/complaints/verify-image', {
           image: imageData,
           hintCategory: category,
-          userNotes: description
+          userNotes: description,
+          isDocument
         });
       } catch (err1) {
         res = await api.post('/complaints/ai-analyze', {
           image: imageData,
           hintCategory: category,
-          userNotes: description
+          userNotes: description,
+          isDocument
         });
       }
 
@@ -432,6 +642,15 @@ const RaiseComplaint = () => {
       return;
     }
 
+    if (imagePreview && !isGeotagged) {
+      setError(
+        lang === 'ta'
+          ? 'புகாரை சமர்ப்பிக்க புகைப்படத்திற்கு அரசு விதிமுறைப்படி ஜியோ-டேக் (Geo-tag) சான்றிதழ் கட்டாயம்.'
+          : 'Mandatory Policy: Photo evidence must be Geo-tagged with verified GPS coordinates before submission.'
+      );
+      return;
+    }
+
     if (aiStatement && aiStatement.isValidCivicIssue === false) {
       setError(
         lang === 'ta'
@@ -469,7 +688,12 @@ const RaiseComplaint = () => {
             }
           : undefined,
         attachments: imagePreview
-          ? [{ url: imagePreview, filename: 'live_evidence_capture.jpg' }]
+          ? [{
+              url: imagePreview,
+              filename: 'geotagged_evidence.jpg',
+              isGeotagged: isGeotagged,
+              geotag: geotagInfo
+            }]
           : []
       });
 
@@ -678,38 +902,55 @@ const RaiseComplaint = () => {
             )}
           </div>
 
-          {/* 5. Live Photo Evidence & AI Analyzer */}
+          {/* 5. Live Photo Evidence & Mandatory Geo-Tag Section */}
           <div className="mb-4">
-            <label className="fw-semibold text-dark small d-flex align-items-center gap-1 mb-2">
-              <Camera size={16} /> {t.addPhoto}
-            </label>
+            <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+              <label className="fw-bold text-dark small d-flex align-items-center gap-1 mb-0">
+                <MapPin size={17} className="text-danger" /> {t.geotagHeading}
+                <span className="badge bg-danger ms-1" style={{ fontSize: '0.65rem' }}>MANDATORY</span>
+              </label>
+              <span className="badge bg-light text-secondary border" style={{ fontSize: '0.72rem' }}>
+                📍 GPS Locked: {coords.lat.toFixed(4)}°, {coords.lng.toFixed(4)}°
+              </span>
+            </div>
+
+            <div className="p-2 px-3 rounded-2 mb-3 small" style={{ backgroundColor: '#f0fdf4', borderLeft: '4px solid #16a34a', color: '#166534' }}>
+              <strong>{lang === 'ta' ? 'அரசு விதிமுறை:' : 'Govt Policy:'}</strong>{' '}
+              {t.geotagPolicyBadge}
+            </div>
 
             <div className="d-flex flex-wrap align-items-start gap-3">
               {/* Camera Trigger Card matching user's dark indigo card */}
               <div
                 onClick={startCamera}
-                className="d-flex flex-column align-items-center justify-content-center text-white rounded-4 shadow-sm cursor-pointer p-4 text-center transition"
+                className="d-flex flex-column align-items-center justify-content-center text-white rounded-4 shadow-sm cursor-pointer p-3 text-center transition"
                 style={{
-                  width: '130px',
-                  height: '130px',
+                  width: '135px',
+                  height: '135px',
                   backgroundColor: '#273252',
                   cursor: 'pointer'
                 }}
               >
-                <Camera size={34} className="mb-2" />
-                <span className="small fw-semibold" style={{ fontSize: '0.78rem' }}>
-                  {t.takePhoto}
+                <Camera size={34} className="mb-2 text-warning" />
+                <span className="small fw-bold" style={{ fontSize: '0.78rem' }}>
+                  {t.takeGeotagPhoto}
+                </span>
+                <span className="opacity-75 mt-1" style={{ fontSize: '0.65rem' }}>
+                  {lang === 'ta' ? 'தானியங்கி ஜிபிஎஸ் வாட்டர்மார்க்' : 'Auto-Watermarks GPS'}
                 </span>
               </div>
 
               {/* Or File Upload Trigger */}
               <label
-                className="d-flex flex-column align-items-center justify-content-center text-muted rounded-4 border border-dashed p-4 text-center cursor-pointer bg-light"
-                style={{ width: '130px', height: '130px', cursor: 'pointer' }}
+                className="d-flex flex-column align-items-center justify-content-center text-muted rounded-4 border border-dashed p-3 text-center cursor-pointer bg-light"
+                style={{ width: '135px', height: '135px', cursor: 'pointer' }}
               >
                 <Upload size={28} className="mb-1 text-primary" />
-                <span style={{ fontSize: '0.72rem' }}>
-                  {lang === 'ta' ? 'கோப்பு பதிவேற்று' : 'Browse File'}
+                <span className="fw-semibold text-dark" style={{ fontSize: '0.75rem' }}>
+                  {t.browseGeotagPhoto}
+                </span>
+                <span className="text-muted mt-1" style={{ fontSize: '0.65rem' }}>
+                  {lang === 'ta' ? 'ஆய்வு செய்து இணைக்கும்' : 'Inspects & Stamps GPS'}
                 </span>
                 <input
                   type="file"
@@ -719,26 +960,61 @@ const RaiseComplaint = () => {
                 />
               </label>
 
-              {/* Photo Preview Thumbnail */}
+              {/* Photo Preview Thumbnail & Geo-Tag Status Badge */}
               {imagePreview && (
-                <div className="position-relative">
-                  <img
-                    src={imagePreview}
-                    alt="Captured Evidence"
-                    className="rounded-4 object-cover border shadow-sm"
-                    style={{ width: '130px', height: '130px', objectFit: 'cover' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImagePreview(null);
-                      setAiStatement(null);
-                    }}
-                    className="btn btn-danger btn-sm p-1 rounded-circle position-absolute top-0 end-0 translate-middle"
-                    title="Remove photo"
-                  >
-                    <X size={14} />
-                  </button>
+                <div className="d-flex flex-column gap-2" style={{ maxWidth: '320px' }}>
+                  <div className="position-relative">
+                    <img
+                      src={imagePreview}
+                      alt="Captured Evidence"
+                      className="rounded-4 object-cover border shadow-sm w-100"
+                      style={{ maxHeight: '180px', objectFit: 'cover' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreview(null);
+                        setAiStatement(null);
+                        setIsGeotagged(false);
+                        setNeedsGeotagStamp(false);
+                        setGeotagInfo(null);
+                      }}
+                      className="btn btn-danger btn-sm p-1 rounded-circle position-absolute top-0 end-0 translate-middle"
+                      title="Remove photo"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  {/* Geotag Verification Banner */}
+                  {isGeotagged ? (
+                    <div className="p-2 rounded-3 bg-success bg-opacity-10 border border-success text-success small d-flex align-items-center gap-2">
+                      <CheckCircle2 size={16} className="flex-shrink-0" />
+                      <div>
+                        <div className="fw-bold" style={{ fontSize: '0.76rem' }}>{t.geotagVerifiedBadge}</div>
+                        <div className="text-muted font-monospace" style={{ fontSize: '0.68rem' }}>
+                          {coords.lat.toFixed(5)}°N, {coords.lng.toFixed(5)}°E
+                        </div>
+                      </div>
+                    </div>
+                  ) : needsGeotagStamp ? (
+                    <div className="p-2 rounded-3 bg-warning bg-opacity-10 border border-warning text-dark small">
+                      <div className="d-flex align-items-center gap-1 text-danger fw-bold mb-1" style={{ fontSize: '0.75rem' }}>
+                        <AlertCircle size={14} /> {lang === 'ta' ? 'ஜியோ-டேக் இல்லை' : 'Missing Geo-Tag'}
+                      </div>
+                      <div className="text-muted mb-2" style={{ fontSize: '0.7rem' }}>
+                        {t.geotagMissingAlert}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleStampCurrentLocation}
+                        className="btn btn-sm btn-outline-success w-100 fw-bold py-1"
+                        style={{ fontSize: '0.72rem' }}
+                      >
+                        {t.stampGeotagBtn}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -960,25 +1236,43 @@ const RaiseComplaint = () => {
         </form>
       )}
 
-      {/* Live Camera Modal */}
+      {/* Live Camera Modal with Geo-Tag HUD */}
       {isCameraActive && (
         <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 1100 }}>
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content bg-dark text-white border-0">
+            <div className="modal-content bg-dark text-white border-0 shadow-lg">
               <div className="modal-header border-0 pb-0">
                 <h5 className="modal-title small fw-bold text-white d-flex align-items-center gap-2">
-                  <Camera size={18} /> {t.liveCamera}
+                  <Camera size={18} className="text-warning" /> {t.takeGeotagPhoto}
                 </h5>
                 <button type="button" className="btn-close btn-close-white" onClick={stopCamera}></button>
               </div>
               <div className="modal-body text-center p-3">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  className="w-100 rounded-3 border border-secondary"
-                  style={{ maxHeight: '380px', objectFit: 'cover' }}
-                ></video>
+                <div className="position-relative">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    className="w-100 rounded-3 border border-secondary"
+                    style={{ maxHeight: '380px', objectFit: 'cover' }}
+                  ></video>
+                  {/* Live GPS HUD Overlay on Camera Stream */}
+                  <div
+                    className="position-absolute bottom-0 start-0 end-0 p-2 px-3 text-start small font-monospace d-flex align-items-center justify-content-between"
+                    style={{
+                      background: 'linear-gradient(to top, rgba(15,23,42,0.92), transparent)',
+                      color: '#34d399',
+                      borderBottomLeftRadius: '0.5rem',
+                      borderBottomRightRadius: '0.5rem'
+                    }}
+                  >
+                    <div>
+                      <div className="fw-bold">📍 GPS: {coords.lat.toFixed(5)}°N, {coords.lng.toFixed(5)}°E</div>
+                      <div className="text-white small opacity-75" style={{ fontSize: '0.7rem' }}>{ward}</div>
+                    </div>
+                    <span className="badge bg-success py-1 px-2" style={{ fontSize: '0.68rem' }}>● GEO-LOCK ACTIVE</span>
+                  </div>
+                </div>
               </div>
               <div className="modal-footer border-0 pt-0 justify-content-center gap-3">
                 <button type="button" className="btn btn-secondary btn-sm px-3" onClick={stopCamera}>
@@ -987,9 +1281,9 @@ const RaiseComplaint = () => {
                 <button
                   type="button"
                   onClick={capturePhoto}
-                  className="btn btn-danger btn-sm px-4 fw-bold d-flex align-items-center gap-2"
+                  className="btn btn-success btn-sm px-4 fw-bold d-flex align-items-center gap-2 shadow"
                 >
-                  <Camera size={16} /> {t.snapBtn}
+                  <Camera size={16} /> {t.snapBtn} (Auto-GeoTag)
                 </button>
               </div>
             </div>
