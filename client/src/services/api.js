@@ -1,7 +1,18 @@
 import axios from 'axios';
 
+const getBaseUrl = () => {
+  // If running in browser on Vercel or any live host, always route to '/api' on the same domain
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname.includes('vercel.app') || window.location.hostname !== 'localhost')
+  ) {
+    return '/api';
+  }
+  return import.meta.env.VITE_API_URL || '/api';
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: getBaseUrl(),
   headers: {
     'Content-Type': 'application/json'
   }
@@ -43,4 +54,3 @@ api.interceptors.response.use(
 );
 
 export default api;
-
