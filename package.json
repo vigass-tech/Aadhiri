@@ -7,7 +7,9 @@
     "build": "npm --prefix client install && npm --prefix client run build",
     "server": "npm --prefix server run dev",
     "client": "npm --prefix client run dev",
+    "ml": "\"C:\\Users\\Vigass\\AppData\\Local\\Programs\\Python\\Python314\\python.exe\" ml_service/app.py",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "start:all": "concurrently \"npm run ml\" \"npm run server\" \"npm run client\"",
     "install:all": "npm install && npm --prefix server install && npm --prefix client install",
     "build:client": "npm --prefix client run build",
     "seed": "npm --prefix server run seed"
