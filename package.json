@@ -1,0 +1,29 @@
+{
+  "name": "aadhirai-smart-citizen-complaint-management",
+  "version": "1.0.0",
+  "description": "AADHIRAI – Smart Citizen Complaint Management System (MERN Stack)",
+  "main": "server/src/server.js",
+  "scripts": {
+    "server": "npm --prefix server run dev",
+    "client": "npm --prefix client run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "build:client": "npm --prefix client run build",
+    "seed": "npm --prefix server run seed"
+  },
+  "keywords": [
+    "mern",
+    "complaint-management",
+    "citizen-portal",
+    "government",
+    "react",
+    "express",
+    "mongodb"
+  ],
+  "author": "Aadhirai Team",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
+

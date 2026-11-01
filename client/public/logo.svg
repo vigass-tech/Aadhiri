@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d2137" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0ea5e9" />
+      <stop offset="100%" stop-color="#14b8a6" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Outer Shield Badge -->
+  <path d="M50 8 L85 22 V50 C85 70 70 88 50 94 C30 88 15 70 15 50 V22 Z" fill="url(#primaryGrad)" stroke="#0ea5e9" stroke-width="2.5" />
+  
+  <!-- Inner Border Accent -->
+  <path d="M50 14 L80 26 V49 C80 66 67 82 50 87 C33 82 20 66 20 49 V26 Z" fill="none" stroke="#ffffff" stroke-opacity="0.2" stroke-width="1.5" />
+
+  <!-- Pillar & Pillar Base (Governance) -->
+  <rect x="47" y="44" width="6" height="24" rx="2" fill="#ffffff" />
+  <path d="M38 68 H62 V72 H38 Z" rx="1.5" fill="#ffffff" />
+  <path d="M42 40 H58 L54 44 H46 Z" fill="#ffffff" />
+
+  <!-- Scales of Justice / Citizen Balance -->
+  <path d="M30 46 L50 42 L70 46" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" />
+  
+  <!-- Left Scale Pan -->
+  <path d="M30 46 L24 57 H36 Z" fill="url(#tealGrad)" opacity="0.9" />
+  <!-- Right Scale Pan -->
+  <path d="M70 46 L64 57 H76 Z" fill="url(#tealGrad)" opacity="0.9" />
+
+  <!-- Radiance / Voice Star at Crest -->
+  <circle cx="50" cy="30" r="5" fill="#f59e0b" />
+  <path d="M50 21 V24 M50 36 V39 M41 30 H44 M56 30 H59" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" />
+</svg>
+

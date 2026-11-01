@@ -1,0 +1,294 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "AADHIRAI - Smart Citizen Complaint Management System API",
+  "collectionId": "aadhirai-api-collection",
+  "dateExported": "2026-11-01",
+  "version": "1.1",
+  "folders": [
+    {
+      "id": "f_auth",
+      "name": "1. Authentication & Profile",
+      "containerId": ""
+    },
+    {
+      "id": "f_departments",
+      "name": "2. Department Management",
+      "containerId": ""
+    },
+    {
+      "id": "f_users",
+      "name": "3. User Management (Admin, Reviewer, Citizen)",
+      "containerId": ""
+    },
+    {
+      "id": "f_complaints",
+      "name": "4. Complaint & Grievance Lifecycle",
+      "containerId": ""
+    },
+    {
+      "id": "f_reviews",
+      "name": "5. Inspection & Reviews",
+      "containerId": ""
+    },
+    {
+      "id": "f_budgets",
+      "name": "6. Budget Management",
+      "containerId": ""
+    },
+    {
+      "id": "f_support",
+      "name": "7. Helpdesk & Support Tickets",
+      "containerId": ""
+    },
+    {
+      "id": "f_dashboards",
+      "name": "8. Role-Based Dashboards & Stats",
+      "containerId": ""
+    },
+    {
+      "id": "f_notifications",
+      "name": "9. In-App Notifications",
+      "containerId": ""
+    }
+  ],
+  "requests": [
+    {
+      "_id": "req_register",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_auth",
+      "name": "1.1 Citizen Registration (Public)",
+      "url": "http://localhost:5000/api/auth/register",
+      "method": "POST",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"name\": \"Selvakumar Raman\",\n  \"email\": \"citizen.test@aadhirai.gov.in\",\n  \"phone\": \"9840445566\",\n  \"password\": \"Citizen@123\",\n  \"address\": \"14/2, 3rd Cross Street, T. Nagar, Chennai\"\n}"
+      }
+    },
+    {
+      "_id": "req_login_superadmin",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_auth",
+      "name": "1.2 Unified Login - Super Admin",
+      "url": "http://localhost:5000/api/auth/login",
+      "method": "POST",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"email\": \"superadmin@aadhirai.gov.in\",\n  \"password\": \"SuperAdmin@123\"\n}"
+      }
+    },
+    {
+      "_id": "req_login_admin",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_auth",
+      "name": "1.3 Unified Login - Admin",
+      "url": "http://localhost:5000/api/auth/login",
+      "method": "POST",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"email\": \"admin@aadhirai.gov.in\",\n  \"password\": \"Admin@123\"\n}"
+      }
+    },
+    {
+      "_id": "req_login_reviewer",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_auth",
+      "name": "1.4 Unified Login - Reviewer",
+      "url": "http://localhost:5000/api/auth/login",
+      "method": "POST",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"email\": \"reviewer@aadhirai.gov.in\",\n  \"password\": \"Reviewer@123\"\n}"
+      }
+    },
+    {
+      "_id": "req_login_citizen",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_auth",
+      "name": "1.5 Unified Login - Citizen",
+      "url": "http://localhost:5000/api/auth/login",
+      "method": "POST",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"email\": \"citizen@aadhirai.gov.in\",\n  \"password\": \"Citizen@123\"\n}"
+      }
+    },
+    {
+      "_id": "req_get_me",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_auth",
+      "name": "1.6 Get Current User (Me)",
+      "url": "http://localhost:5000/api/auth/me",
+      "method": "GET",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{TOKEN}}" }
+      ]
+    },
+    {
+      "_id": "req_get_departments",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_departments",
+      "name": "2.1 Get All Departments (Public/Private)",
+      "url": "http://localhost:5000/api/departments",
+      "method": "GET",
+      "headers": []
+    },
+    {
+      "_id": "req_create_department",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_departments",
+      "name": "2.2 Create Department (Super Admin)",
+      "url": "http://localhost:5000/api/departments",
+      "method": "POST",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{SUPER_ADMIN_TOKEN}}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"name\": \"Urban Forestry & Greenery\",\n  \"code\": \"FOR\",\n  \"description\": \"Tree plantation, pruning, park maintenance, and civic landscaping.\",\n  \"head\": \"Dr. S. Kabilan\",\n  \"email\": \"forestry@aadhirai.gov.in\",\n  \"phone\": \"+91 44 2859 1007\"\n}"
+      }
+    },
+    {
+      "_id": "req_create_complaint",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_complaints",
+      "name": "4.1 Raise Complaint (Citizen)",
+      "url": "http://localhost:5000/api/complaints",
+      "method": "POST",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{CITIZEN_TOKEN}}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"title\": \"Damaged Storm Water Drain Slab\",\n  \"description\": \"A concrete slab over the storm water drainage has cracked open, leaving a 2-foot hole on the walkway.\",\n  \"category\": \"Roads & Infrastructure\",\n  \"location\": \"Ward 104, 4th Avenue, Shanthi Colony, Anna Nagar\",\n  \"address\": \"Opposite State Bank Branch\",\n  \"priority\": \"HIGH\"\n}"
+      }
+    },
+    {
+      "_id": "req_track_complaint",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_complaints",
+      "name": "4.2 Public Track Complaint by Ticket ID (No Login Required)",
+      "url": "http://localhost:5000/api/complaints/track/ADH-2026-101001",
+      "method": "GET",
+      "headers": []
+    },
+    {
+      "_id": "req_get_complaints",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_complaints",
+      "name": "4.3 Get Complaints (Role-Scoped)",
+      "url": "http://localhost:5000/api/complaints?status=SUBMITTED",
+      "method": "GET",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{TOKEN}}" }
+      ]
+    },
+    {
+      "_id": "req_assign_complaint",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_complaints",
+      "name": "4.4 Assign Department & Reviewer (Admin/Super Admin)",
+      "url": "http://localhost:5000/api/complaints/{{COMPLAINT_ID}}/assign",
+      "method": "PATCH",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ADMIN_TOKEN}}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"departmentId\": \"{{DEPARTMENT_ID}}\",\n  \"reviewerId\": \"{{REVIEWER_ID}}\",\n  \"priority\": \"HIGH\",\n  \"remarks\": \"Assigned to field inspector for urgent site evaluation.\"\n}"
+      }
+    },
+    {
+      "_id": "req_submit_review",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_reviews",
+      "name": "5.1 Submit Field Review (Reviewer)",
+      "url": "http://localhost:5000/api/reviews/{{COMPLAINT_ID}}",
+      "method": "POST",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{REVIEWER_TOKEN}}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"decision\": \"APPROVED\",\n  \"remarks\": \"Site inspected physically. The drain slab has suffered structural fracture and requires replacement with a precast reinforced concrete cover slab.\",\n  \"recommendation\": \"Deploy precast slab crew from PWD Zone 5.\"\n}"
+      }
+    },
+    {
+      "_id": "req_update_status",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_complaints",
+      "name": "4.5 Update Complaint Status (Admin/Super Admin)",
+      "url": "http://localhost:5000/api/complaints/{{COMPLAINT_ID}}/status",
+      "method": "PATCH",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ADMIN_TOKEN}}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"status\": \"RESOLVED\",\n  \"resolutionRemarks\": \"Precast concrete slab installed, sealed with bitumen mastic, and walkway reopened to pedestrian traffic successfully.\",\n  \"remarks\": \"Work verified on ground by Zonal Supervisor.\"\n}"
+      }
+    },
+    {
+      "_id": "req_public_stats",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_dashboards",
+      "name": "8.1 Public Landing Page Stats",
+      "url": "http://localhost:5000/api/dashboard/public-stats",
+      "method": "GET",
+      "headers": []
+    },
+    {
+      "_id": "req_superadmin_dashboard",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_dashboards",
+      "name": "8.2 Super Admin Dashboard Metrics",
+      "url": "http://localhost:5000/api/dashboard/super-admin",
+      "method": "GET",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{SUPER_ADMIN_TOKEN}}" }
+      ]
+    },
+    {
+      "_id": "req_budgets",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_budgets",
+      "name": "6.1 Get Budgets Summary",
+      "url": "http://localhost:5000/api/budgets",
+      "method": "GET",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{TOKEN}}" }
+      ]
+    },
+    {
+      "_id": "req_notifications",
+      "colId": "aadhirai-api-collection",
+      "containerId": "f_notifications",
+      "name": "9.1 Get User Notifications",
+      "url": "http://localhost:5000/api/notifications",
+      "method": "GET",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{TOKEN}}" }
+      ]
+    }
+  ]
+}
+
