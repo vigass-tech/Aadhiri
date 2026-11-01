@@ -2,6 +2,7 @@ const Complaint = require('../models/Complaint');
 const Notification = require('../models/Notification');
 const Department = require('../models/Department');
 const User = require('../models/User');
+const { analyzeCivicImage } = require('../utils/aiVisionService');
 
 // Helper to generate a unique Ticket ID
 const generateTicketId = async () => {
@@ -486,7 +487,7 @@ const deleteComplaint = async (req, res, next) => {
   }
 };
 
-// @desc    AI Vision Analyzer for Grievance Photos
+// @desc    AI Vision Analyzer for Grievance Photos (Google Gemini 1.5 Flash Vision + Municipal Engine)
 // @route   POST /api/complaints/ai-analyze
 // @access  Private (CITIZEN, all authenticated)
 const analyzeCivicImageAI = async (req, res, next) => {
@@ -500,96 +501,28 @@ const analyzeCivicImageAI = async (req, res, next) => {
       });
     }
 
-    // AI Defect Classification Knowledge Base
-    const defectProfiles = [
-      {
-        keyword: 'pothole',
-        patterns: ['road', 'pothole', 'bitumen', 'tar', 'asphalt', 'street', 'crater'],
-        issueEn: 'Severe Road Pothole & Bitumen Surface Fracture',
-        issueTa: 'சாலையில் அபாயகரமான ஆழமான குழி மற்றும் தார் சாலை சேதமடைந்துள்ளது',
-        category: 'Roads & Infrastructure',
-        departmentCode: 'PWD',
-        suggestedPriority: 'HIGH',
-        statementEn: 'Deep asphalt pavement depression and fractured road surface detected. Poses immediate vehicular hazard to two-wheelers and night traffic. Requires urgent bituminous patching by PWD road crew.',
-        statementTa: 'பிரதான சாலையில் ஆழமான குழி மற்றும் தார் பெயர்ந்து அபாயகரமான நிலையில் உள்ளது கண்டறியப்பட்டுள்ளது. இருசக்கர வாகன ஓட்டிகளுக்கு விபத்து அபாயம் உள்ளதால் பொதுப்பணித்துறை மூலம் உடனடியாக தார் பூச்சு மற்றும் சீரமைப்பு பணிகள் மேற்கொள்ளப்பட வேண்டும்.',
-        confidence: 0.96
-      },
-      {
-        keyword: 'water_leak',
-        patterns: ['water', 'pipe', 'leak', 'burst', 'drain', 'flood', 'drinking water', 'overflow'],
-        issueEn: 'High-Pressure Drinking Water Pipeline Rupture & Wastage',
-        issueTa: 'குடிநீர் குழாய் உடைப்பு மற்றும் சாலையில் நீர் வீணாதல்',
-        category: 'Water Supply',
-        departmentCode: 'WSS',
-        suggestedPriority: 'URGENT',
-        statementEn: 'Underground municipal water pipeline burst detected causing continuous potable water runoff and soil erosion along road verge. Urgent pipeline replacement and valve throttling required.',
-        statementTa: 'பூமிக்கடியில் உள்ள பிரதான குடிநீர் விநியோக குழாய் உடைந்து சாலை மற்றும் நடைபாதையில் தொடர்ந்து நீர் பெருக்கெடுத்து ஓடுகிறது. குடிநீர் வாரிய அவசர பராமரிப்பு குழு உடனடியாக சீரமைக்க வேண்டும்.',
-        confidence: 0.95
-      },
-      {
-        keyword: 'garbage',
-        patterns: ['garbage', 'waste', 'trash', 'dump', 'bin', 'plastic', 'debris', 'solid waste'],
-        issueEn: 'Solid Municipal Waste Accumulation & Health Hazard',
-        issueTa: 'சாலையோரக் குப்பை குவியல் மற்றும் சுகாதார சீர்கேடு',
-        category: 'Sanitation & Waste',
-        departmentCode: 'SAN',
-        suggestedPriority: 'MEDIUM',
-        statementEn: 'Overflowing municipal community dustbin and uncollected solid civic refuse. Attracting stray animals and generating odor. Recommended for mechanized compactor evacuation.',
-        statementTa: 'குப்பை தொட்டி நிரம்பி வழிந்து சாலையோரம் அதிகளவில் கழிவுகள் தேங்கியுள்ளது. துர்நாற்றம் மற்றும் சுகாதார சீர்கேடு ஏற்பட்டுள்ளதால் நகராட்சி தூய்மைப் பணியாளர்கள் உடனடியாக அகற்ற வேண்டும்.',
-        confidence: 0.94
-      },
-      {
-        keyword: 'light',
-        patterns: ['street light', 'lamp', 'bulb', 'electric', 'pole', 'wire', 'dark', 'illumination'],
-        issueEn: 'Non-Functional Street Lamp & Exposed Wire Danger',
-        issueTa: 'எரியாத தெருவிளக்கு மற்றும் திறந்தநிலை மின்சார கம்பி ஆபத்து',
-        category: 'Electricity & Lighting',
-        departmentCode: 'ELEC',
-        suggestedPriority: 'HIGH',
-        statementEn: 'Defective LED street luminaire and dangling exposed electrical wires at pole base. Area plunged in darkness creating safety risk. Requires luminaire repair and conduit insulation.',
-        statementTa: 'தெருவிளக்கு கம்பத்தில் விளக்கு எரியாமல் இருள் சூழ்ந்துள்ளதுடன், மின்சார கம்பிகள் திறந்த நிலையில் ஆபத்தை விளைவிக்கும் வகையில் உள்ளன. மின்வாரியம் உடனடியாக சீரமைக்க வேண்டும்.',
-        confidence: 0.97
-      },
-      {
-        keyword: 'drainage',
-        patterns: ['drainage', 'sewage', 'gutter', 'manhole', 'stagnant', 'mosquito'],
-        issueEn: 'Sewage Overflow & Blocked Storm Water Drain',
-        issueTa: 'சாக்கடை நீர் தேக்கம் மற்றும் பாதாள சாக்கடை அடைப்பு',
-        category: 'Public Health',
-        departmentCode: 'HLTH',
-        suggestedPriority: 'HIGH',
-        statementEn: 'Blocked open storm drain resulting in blackwater stagnation and vector breeding risk. Recommended for hydraulic desilting and municipal vector control larvicide spray.',
-        statementTa: 'சாக்கடை கால்வாயில் அடைப்பு ஏற்பட்டு கழிவுநீர் சாலையில் தேங்கி கொசு உற்பத்தியாகி பொதுமக்களுக்கு நோய் பரவும் அபாயம் உள்ளது. சுகாதாரத்துறை மூலம் தூர்வாரப்பட வேண்டும்.',
-        confidence: 0.93
-      }
-    ];
-
-    // Determine best match from hint or random civic defect profile
-    let matched = defectProfiles[0];
-    const combinedNotes = `${hintCategory || ''} ${userNotes || ''}`.toLowerCase();
-
-    for (const profile of defectProfiles) {
-      if (profile.patterns.some((p) => combinedNotes.includes(p))) {
-        matched = profile;
-        break;
-      }
-    }
+    // Call Civic AI Vision Service (Google Gemini 1.5 Flash or Fallback Municipal Engine)
+    const analysis = await analyzeCivicImage(image, hintCategory, userNotes);
 
     // Lookup corresponding department ID if available
-    const dept = await Department.findOne({ code: matched.departmentCode });
+    let dept = null;
+    if (analysis.departmentCode) {
+      dept = await Department.findOne({ code: analysis.departmentCode });
+    }
 
     res.status(200).json({
       success: true,
       analysis: {
-        detectedIssue: matched.issueEn,
-        detectedIssueTa: matched.issueTa,
-        category: matched.category,
-        suggestedPriority: matched.suggestedPriority,
+        detectedIssue: analysis.detectedIssue,
+        detectedIssueTa: analysis.detectedIssueTa,
+        category: analysis.category,
+        suggestedPriority: analysis.suggestedPriority,
         department: dept ? dept._id : null,
-        departmentName: dept ? `${dept.name} (${dept.code})` : matched.departmentCode,
-        statementEn: matched.statementEn,
-        statementTa: matched.statementTa,
-        confidence: matched.confidence
+        departmentName: dept ? `${dept.name} (${dept.code})` : analysis.departmentCode,
+        statementEn: analysis.statementEn,
+        statementTa: analysis.statementTa,
+        confidence: analysis.confidence,
+        aiProvider: analysis.aiProvider
       }
     });
   } catch (error) {

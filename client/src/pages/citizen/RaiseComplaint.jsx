@@ -388,6 +388,15 @@ const RaiseComplaint = () => {
     if (!aiStatement) return;
     const stmt = lang === 'ta' ? aiStatement.statementTa : aiStatement.statementEn;
     setDescription(stmt);
+    if (aiStatement.category) {
+      setCategory(aiStatement.category);
+    }
+    if (aiStatement.suggestedPriority) {
+      setPriority(aiStatement.suggestedPriority);
+    }
+    if (aiStatement.department) {
+      setDepartmentId(aiStatement.department);
+    }
   };
 
   // Submit Complaint to MongoDB Atlas
@@ -711,11 +720,19 @@ const RaiseComplaint = () => {
               className="p-4 rounded-3 border mb-4 shadow-sm"
               style={{ backgroundColor: '#f0fdf4', borderColor: '#86efac' }}
             >
-              <div className="d-flex align-items-center justify-content-between mb-2">
+              <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
                 <span className="fw-bold text-success d-flex align-items-center gap-1 small">
-                  <Sparkles size={16} /> {t.aiTitle} ({(aiStatement.confidence * 100).toFixed(0)}% Confidence)
+                  <Sparkles size={16} /> {t.aiTitle}
+                  {aiStatement.aiProvider && (
+                    <span className="badge bg-dark bg-opacity-75 ms-1" style={{ fontSize: '0.68rem' }}>
+                      {aiStatement.aiProvider}
+                    </span>
+                  )}
+                  <span className="text-muted ms-1" style={{ fontSize: '0.75rem' }}>
+                    ({(aiStatement.confidence * 100).toFixed(0)}% Match)
+                  </span>
                 </span>
-                <span className="badge bg-success">
+                <span className="badge bg-success px-2 py-1">
                   {lang === 'ta' ? aiStatement.detectedIssueTa : aiStatement.detectedIssue}
                 </span>
               </div>
@@ -728,18 +745,34 @@ const RaiseComplaint = () => {
               </div>
 
               <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <div className="small text-muted">
-                  <strong>Dept:</strong> {aiStatement.departmentName} • <strong>Priority:</strong>{' '}
-                  <span className={`badge badge-priority-${aiStatement.suggestedPriority}`}>
-                    {aiStatement.suggestedPriority}
+                <div className="small text-muted d-flex align-items-center gap-2 flex-wrap">
+                  <span><strong>Dept:</strong> {aiStatement.departmentName}</span>
+                  <span>•</span>
+                  <span><strong>Priority:</strong>{' '}
+                    <span
+                      className="badge fw-bold"
+                      style={{
+                        backgroundColor:
+                          aiStatement.suggestedPriority === 'URGENT'
+                            ? '#dc2626'
+                            : aiStatement.suggestedPriority === 'HIGH'
+                            ? '#ea580c'
+                            : aiStatement.suggestedPriority === 'MEDIUM'
+                            ? '#2563eb'
+                            : '#64748b',
+                        color: '#ffffff'
+                      }}
+                    >
+                      {aiStatement.suggestedPriority}
+                    </span>
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={applyAIStatement}
-                  className="btn btn-sm btn-success d-flex align-items-center gap-1 shadow-sm"
+                  className="btn btn-sm btn-success d-flex align-items-center gap-1 shadow-sm px-3 py-1"
                 >
-                  <CheckCircle2 size={14} /> {t.applyAi}
+                  <CheckCircle2 size={15} /> {t.applyAi}
                 </button>
               </div>
             </div>

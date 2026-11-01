@@ -1,25 +1,15 @@
 {
-  "services": {
-    "client": {
-      "root": "client/"
-    },
-    "server": {
-      "root": "server/",
-      "entrypoint": "src/server.js"
-    }
-  },
+  "version": 2,
+  "buildCommand": "npm --prefix client run build",
+  "outputDirectory": "client/dist",
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": {
-        "service": "server"
-      }
+      "destination": "/api/index.js"
     },
     {
       "source": "/(.*)",
-      "destination": {
-        "service": "client"
-      }
+      "destination": "/index.html"
     }
   ]
 }
