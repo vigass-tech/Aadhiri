@@ -370,40 +370,45 @@ const RaiseComplaint = () => {
           const data = imageData.data;
           const totalPixels = sampleSize * sampleSize;
 
-          let whitePixels = 0;
-          let blackPixels = 0;
-          let lowSaturationPixels = 0;
+          let pureWhite = 0; // > 248
+          let pureBlack = 0; // < 20
+          let midtones = 0;  // 40 - 215
+          let totalColorDiff = 0;
 
           for (let i = 0; i < data.length; i += 4) {
             const r = data[i];
             const g = data[i + 1];
             const b = data[i + 2];
 
-            // White / paper background
-            if (r > 225 && g > 225 && b > 225) whitePixels++;
-            // Black ink / dark text / wire lines
-            if (r < 40 && g < 40 && b < 40) blackPixels++;
+            // Pure printer paper white / computer document background
+            if (r > 248 && g > 248 && b > 248) {
+              pureWhite++;
+            } else if (r < 20 && g < 20 && b < 20) {
+              // Pure digital black / black schematic background
+              pureBlack++;
+            }
 
-            // Grayscale / low saturation check (schematics & documents lack natural color variance)
-            const colorDiff = Math.abs(r - g) + Math.abs(g - b) + Math.abs(b - r);
-            if (colorDiff < 25) lowSaturationPixels++;
+            // Normal photographic midtones (natural road, soil, foliage, sky, masonry)
+            if ((r >= 40 && r <= 215) || (g >= 40 && g <= 215) || (b >= 40 && b <= 215)) {
+              midtones++;
+            }
+
+            totalColorDiff += Math.abs(r - g) + Math.abs(g - b) + Math.abs(b - r);
           }
 
-          const whiteRatio = whitePixels / totalPixels;
-          const blackRatio = blackPixels / totalPixels;
-          const monoRatio = (whitePixels + blackPixels) / totalPixels;
-          const lowColorRatio = lowSaturationPixels / totalPixels;
+          const binaryRatio = (pureWhite + pureBlack) / totalPixels;
+          const midtoneRatio = midtones / totalPixels;
+          const avgColorVariance = totalColorDiff / (totalPixels * 3);
 
-          // Technical schematics, paper documents, circuit diagrams, and text screenshots
-          const isDocOrSchematic =
-            (monoRatio > 0.45 && lowColorRatio > 0.70) ||
-            (whiteRatio > 0.35 && lowColorRatio > 0.75) ||
-            (blackRatio > 0.35 && lowColorRatio > 0.75);
+          // Technical schematics, paper documents, circuit diagrams, and text screenshots:
+          // Over 85% pure binary pixels, less than 12% photographic midtones, and near-zero color variance
+          const isDocOrSchematic = binaryRatio > 0.85 && midtoneRatio < 0.12 && avgColorVariance < 12;
 
           resolve({
             isDocument: isDocOrSchematic,
-            whiteRatio,
-            lowColorRatio
+            binaryRatio,
+            midtoneRatio,
+            avgColorVariance
           });
         } catch (e) {
           resolve({ isDocument: false });
@@ -570,23 +575,25 @@ const RaiseComplaint = () => {
   };
 
   // Trigger AI Vision Inspection & Statement Formulation
-  const triggerAIAnalysis = async (imageData, isDocument = false) => {
+  const triggerAIAnalysis = async (imageData, isDocument = false, categoryOverride = null) => {
     setAnalyzingAI(true);
     setAiStatement(null);
+
+    const activeCat = categoryOverride || category;
 
     try {
       let res;
       try {
         res = await api.post('/complaints/verify-image', {
           image: imageData,
-          hintCategory: category,
+          hintCategory: activeCat,
           userNotes: description,
           isDocument
         });
       } catch (err1) {
         res = await api.post('/complaints/ai-analyze', {
           image: imageData,
-          hintCategory: category,
+          hintCategory: activeCat,
           userNotes: description,
           isDocument
         });
@@ -597,7 +604,7 @@ const RaiseComplaint = () => {
         setAiStatement(analysis);
         // Auto-populate fields if AI verified that this is a genuine civic issue
         if (analysis.isValidCivicIssue) {
-          if (analysis.category && analysis.category !== 'Unknown / unrecognized') {
+          if (analysis.category && analysis.category !== 'Unknown / unrecognized' && !categoryOverride) {
             setCategory(analysis.category);
           }
           if (analysis.severity) {
@@ -1185,7 +1192,13 @@ const RaiseComplaint = () => {
               <select
                 className="gov-select"
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) => {
+                  const newCat = e.target.value;
+                  setCategory(newCat);
+                  if (imagePreview && (!aiStatement || aiStatement.isValidCivicIssue)) {
+                    triggerAIAnalysis(imagePreview, false, newCat);
+                  }
+                }}
               >
                 <option value="Potholes and damaged roads">Potholes and damaged roads (சாலை குழிகள்)</option>
                 <option value="Garbage and illegal dumping">Garbage and illegal dumping (குப்பைக் கழிவுகள்)</option>
