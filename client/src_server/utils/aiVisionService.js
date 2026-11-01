@@ -186,14 +186,13 @@ const validateImageFormatAndSize = (imageData) => {
 };
 
 /**
- * 2. Call Standalone Python ML Microservice (FastAPI / MobileNetV3) if configured
+ * 2. Call Standalone Python ML Microservice (FastAPI / Civic Eye YOLOv8)
  */
 const callPythonMLService = async (imageData, hintCategory, userNotes) => {
-  const serviceUrl = process.env.ML_SERVICE_URL;
-  if (!serviceUrl) return null;
+  const serviceUrl = process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000/verify-image';
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for ML inference
 
   try {
     const res = await fetch(serviceUrl, {
@@ -208,7 +207,7 @@ const callPythonMLService = async (imageData, hintCategory, userNotes) => {
       const data = await res.json();
       return {
         ...data,
-        aiProvider: 'MobileNetV3 PyTorch ML Service'
+        aiProvider: data.aiProvider || 'Civic Eye YOLOv8 (Hugging Face tanmay9132)'
       };
     }
     return null;

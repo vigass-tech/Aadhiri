@@ -1,74 +1,112 @@
-# AADHIRAI - MobileNetV3 Civic Issue Image Verification Microservice
+# AADHIRAI - Civic Eye YOLOv8 Pothole & Garbage Detection Microservice
 
-This microservice provides automated image verification and multi-task severity classification for citizen complaints in the **AADHIRAI Smart Citizen Complaint Management System**.
-
----
-
-## 1. Architecture Overview
-- **Backbone**: MobileNetV3-Small (`torchvision.models.mobilenet_v3_small`)
-- **Dual-Task Multi-Head Architecture**:
-  1. **Category Classification Head**: 10 classes (9 civic categories + 1 non-civic rejection class)
-  2. **Severity Classification Head**: 4 levels (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`)
-- **Input Dimensions**: 224x224 RGB, normalized with ImageNet statistics (`mean=[0.485, 0.456, 0.406]`, `std=[0.229, 0.224, 0.225]`)
+This microservice provides automated, real pretrained object detection and AI-estimated severity classification for citizen complaints in the **AADHIRAI Smart Citizen Complaint Management System**.
 
 ---
 
-## 2. Recognized Classes
-
-### A. Civic Categories (9 Classes)
-1. `Potholes and damaged roads`
-2. `Garbage and illegal dumping`
-3. `Overflowing drainage and sewage`
-4. `Water leakage and waterlogging`
-5. `Damaged streetlights`
-6. `Broken public infrastructure`
-7. `Fallen trees and road obstructions`
-8. `Other civic issues`
-9. `Unknown / unrecognized`
-
-### B. Invalid / Non-Civic Classes (Rejected)
-- Selfies and human portraits
-- Animals and domestic pets
-- Food, beverages, indoor kitchen items
-- Random nature scenery without public infrastructure defects
-- Screenshots, invoices, receipts, and text documents
-- Blurry, pitch-black, or unusable images
-
-### C. Severity Triage Levels
-- **`LOW`**: Minor issue, no immediate danger
-- **`MEDIUM`**: Needs attention but not urgent
-- **`HIGH`**: Significant damage, possible vehicular or public safety risk
-- **`CRITICAL`**: Immediate danger to people or public safety (live wires, open manholes, major pipe bursts)
+## 1. Model Overview
+- **Model**: Civic Eye Pothole & Garbage Detection (YOLOv8)
+- **Hugging Face Repository**: [`tanmay9132/civic-eye-pothole-garbage`](https://huggingface.co/tanmay9132/civic-eye-pothole-garbage)
+- **Weights File**: `ml_service/models/best.pt` (109.1 MB)
+- **Supported Detection Classes**:
+  1. `Potholes` (mapped to `Potholes and damaged roads` / PWD department)
+  2. `Garbage` (mapped to `Garbage and illegal dumping` / SAN department)
+- **Scope Notice**:
+  This model specifically detects and localizes **Potholes** and **Garbage Dumps**. Unrelated images (selfies, documents, indoor objects, food, pets) or unsupported civic issues (streetlights, drainage, water leakage) yield zero detections and are flagged as unsupported.
 
 ---
 
-## 3. Setup and Training Instructions
+## 2. API Endpoints
+
+### `GET /health`
+Returns model status, loaded weights, device (CPU/GPU), and supported classes.
+
+### `POST /verify-image`
+Takes image data (base64 string or Data URL), runs real YOLOv8 inference, computes bounding boxes, and calculates severity and AI-estimated priority.
+
+**Response Structure (Valid Defect):**
+```json
+{
+  "success": true,
+  "isValidCivicIssue": true,
+  "supported": true,
+  "category": "Potholes and damaged roads",
+  "severity": "HIGH",
+  "priority": "HIGH",
+  "isAiEstimated": true,
+  "confidence": 0.517,
+  "departmentCode": "PWD",
+  "departmentName": "Public Works & Roads (PWD)",
+  "detectedIssue": "Verified Road Pothole (1 detected)",
+  "explanation": "Civic Eye YOLOv8 detected 1 road pothole(s) covering 15.2% of image area with 51.7% model confidence.",
+  "recommendedAction": "Dispatch PWD road maintenance squad with hot-mix bitumen patching material and vibratory compactor.",
+  "boundingBoxes": [
+    {
+      "label": "Potholes",
+      "confidence": 0.517,
+      "box": [185.5, 185.4, 440.6, 369.1],
+      "area_ratio": 0.1525
+    }
+  ],
+  "isLowConfidence": false,
+  "requiresManualReview": false,
+  "modelVersion": "Civic-Eye-YOLOv8-tanmay9132",
+  "aiProvider": "Civic Eye YOLOv8 (Hugging Face tanmay9132)"
+}
+```
+
+**Response Structure (Invalid / Unsupported Image):**
+```json
+{
+  "success": true,
+  "isValidCivicIssue": false,
+  "supported": false,
+  "category": "Unknown / unrecognized",
+  "message": "Invalid or unsupported civic issue image. Please upload a relevant image.",
+  "explanation": "No pothole or garbage defect was detected by the Civic Eye YOLOv8 AI model.",
+  "recommendedAction": "Please upload a clear, on-site photograph of a road pothole or municipal garbage dump.",
+  "boundingBoxes": []
+}
+```
+
+---
+
+## 3. How to Run Locally
 
 ### Step 1: Install Requirements
 ```bash
-cd ml_service
-pip install -r requirements.txt
+pip install -r ml_service/requirements.txt
 ```
 
-### Step 2: Run Training & Evaluation
+### Step 2: Download Weights (if not already downloaded)
 ```bash
-python train_mobilenetv3.py
+python ml_service/download_model.py
 ```
-This script will:
-- Partition the dataset into **70% Training**, **15% Validation**, and **15% Testing** sets.
-- Apply data augmentations (random horizontal flip, rotation, color jitter).
-- Fine-tune MobileNetV3 with dual cross-entropy loss.
-- Output **Accuracy**, **Weighted Precision**, **Weighted Recall**, **F1-Score**, and the complete **Confusion Matrix**.
-- Save the trained weights to `models/mobilenetv3_civic.pth`.
 
-### Step 3: Run FastAPI Microservice
+### Step 3: Start FastAPI Inference Server
 ```bash
-uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+python ml_service/app.py
 ```
-API Docs available at: `http://localhost:8000/docs`
+The server starts on `http://127.0.0.1:8000`.
 
 ---
 
-## 4. Production MERN Integration
-The AADHIRAI Express backend checks for the presence of `ML_SERVICE_URL=http://localhost:8000/verify-image`. When online, it routes directly to this PyTorch service; when running serverless on Vercel or when Python is offline, the backend executes the self-contained multimodal vision engine without missing a beat!
+## 4. Production Deployment
 
+To host this Python ML service on a cloud provider (e.g. Render, Railway, AWS EC2, or DigitalOcean):
+1. Create a `Dockerfile`:
+   ```dockerfile
+   FROM python:3.11-slim
+   WORKDIR /app
+   RUN apt-get update && apt-get install -y libgl1 libglib2.0-0
+   COPY requirements.txt .
+   RUN pip install --no-cache-dir -r requirements.txt
+   COPY . .
+   RUN python download_model.py
+   EXPOSE 8000
+   CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+   ```
+2. Set the `ML_SERVICE_URL` in your Node.js backend `.env`:
+   ```env
+   ML_SERVICE_URL=https://your-ml-service.onrender.com/verify-image
+   ```

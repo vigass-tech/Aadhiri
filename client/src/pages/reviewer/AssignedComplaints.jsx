@@ -287,7 +287,17 @@ const AssignedComplaints = () => {
                           <div className="text-muted mb-1"><strong>Explanation:</strong> {selectedComplaint.aiAnalysis.explanation}</div>
                         )}
                         {selectedComplaint.aiAnalysis.recommendedAction && (
-                          <div className="text-primary"><strong>Action:</strong> {selectedComplaint.aiAnalysis.recommendedAction}</div>
+                          <div className="text-primary mb-1"><strong>Action:</strong> {selectedComplaint.aiAnalysis.recommendedAction}</div>
+                        )}
+                        {selectedComplaint.aiAnalysis.boundingBoxes && selectedComplaint.aiAnalysis.boundingBoxes.length > 0 && (
+                          <div className="p-1 px-2 rounded bg-white border font-monospace mt-1">
+                            <strong>🎯 YOLO BBoxes:</strong>{' '}
+                            {selectedComplaint.aiAnalysis.boundingBoxes.map((b, i) => (
+                              <span key={i} className="badge bg-secondary me-1">
+                                {b.label} ({(b.confidence * 100).toFixed(0)}%)
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </div>
                     </div>

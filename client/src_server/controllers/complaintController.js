@@ -532,20 +532,25 @@ const verifyComplaintImage = async (req, res, next) => {
       success: true,
       analysis: {
         isValidCivicIssue: analysis.isValidCivicIssue !== false,
+        supported: analysis.supported !== false,
         category: analysis.category,
         severity: analysis.severity,
+        priority: analysis.priority || analysis.severity,
+        isAiEstimated: Boolean(analysis.isAiEstimated),
         confidence: analysis.confidence,
         explanation: analysis.explanation,
         recommendedAction: analysis.recommendedAction,
         detectedIssue: analysis.detectedIssue || analysis.category,
         detectedIssueTa: analysis.detectedIssueTa || analysis.detectedIssue || analysis.category,
+        message: analysis.message || null,
         statementEn: analysis.statementEn || analysis.explanation || '',
         statementTa: analysis.statementTa || '',
+        boundingBoxes: analysis.boundingBoxes || [],
         department: dept ? dept._id : null,
         departmentName: dept ? `${dept.name} (${dept.code})` : analysis.departmentName,
         isLowConfidence: Boolean(analysis.isLowConfidence),
         requiresManualReview: Boolean(analysis.requiresManualReview),
-        aiProvider: analysis.aiProvider || 'AADHIRAI Machine Learning Vision Engine'
+        aiProvider: analysis.aiProvider || 'Civic Eye YOLOv8 (Hugging Face tanmay9132)'
       }
     });
   } catch (error) {

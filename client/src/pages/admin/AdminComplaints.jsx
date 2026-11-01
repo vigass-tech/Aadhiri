@@ -422,8 +422,20 @@ const AdminComplaints = () => {
                         </div>
                       )}
                       {selectedComplaint.aiAnalysis.recommendedAction && (
-                        <div className="small text-muted">
+                        <div className="small text-muted mb-2">
                           <strong>Recommended Action:</strong> {selectedComplaint.aiAnalysis.recommendedAction}
+                        </div>
+                      )}
+                      {selectedComplaint.aiAnalysis.boundingBoxes && selectedComplaint.aiAnalysis.boundingBoxes.length > 0 && (
+                        <div className="p-2 rounded bg-light border small font-monospace mb-2">
+                          <strong className="text-dark d-block mb-1">🎯 YOLOv8 Detections ({selectedComplaint.aiAnalysis.boundingBoxes.length}):</strong>
+                          <div className="d-flex flex-wrap gap-1">
+                            {selectedComplaint.aiAnalysis.boundingBoxes.map((b, bIdx) => (
+                              <span key={bIdx} className="badge bg-secondary">
+                                #{bIdx + 1} {b.label} ({(b.confidence * 100).toFixed(1)}%) • [{b.box ? b.box.map(Math.round).join(', ') : ''}]
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
                       {selectedComplaint.aiAnalysis.isLowConfidence && (

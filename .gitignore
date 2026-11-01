@@ -20,6 +20,11 @@ client/dist/
 dist/
 build/
 
+# Machine Learning Models
+*.pt
+*.pth
+ml_service/models/best.pt
+
 # Editor & OS files
 .vscode/
 .idea/

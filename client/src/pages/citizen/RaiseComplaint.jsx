@@ -677,21 +677,24 @@ const RaiseComplaint = () => {
         department: departmentId || undefined,
         location: ward,
         address,
-        priority,
+        priority: aiStatement?.priority || priority,
         coordinates: coords,
         aiAnalysis: aiStatement
           ? {
               isValidCivicIssue: aiStatement.isValidCivicIssue !== false,
               predictedCategory: aiStatement.category,
               predictedSeverity: aiStatement.severity,
+              priority: aiStatement.priority || aiStatement.severity,
+              isAiEstimated: true,
               confidence: aiStatement.confidence,
               detectedIssue: aiStatement.detectedIssue,
               explanation: aiStatement.explanation,
               recommendedAction: aiStatement.recommendedAction,
+              boundingBoxes: aiStatement.boundingBoxes || [],
               autoStatement: lang === 'ta' ? aiStatement.statementTa : aiStatement.statementEn,
               isLowConfidence: Boolean(aiStatement.isLowConfidence),
               requiresManualReview: Boolean(aiStatement.requiresManualReview),
-              modelVersion: 'MobileNetV3-Civic-v1.0'
+              modelVersion: aiStatement.modelVersion || 'Civic-Eye-YOLOv8-tanmay9132'
             }
           : undefined,
         attachments: imagePreview
@@ -1045,20 +1048,18 @@ const RaiseComplaint = () => {
               style={{ backgroundColor: '#fff7ed', borderColor: '#fdba74' }}
             >
               <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                <span className="fw-bold text-danger d-flex align-items-center gap-2 small">
+                <span className="fw-bold text-danger d-flex align-items-center gap-2">
                   <AlertCircle size={18} className="text-danger flex-shrink-0" />
-                  {t.aiNonCivicTitle}
+                  {aiStatement.message || "Invalid or unsupported civic issue image. Please upload a relevant image."}
                 </span>
-                {aiStatement.aiProvider && (
-                  <span className="badge bg-secondary bg-opacity-75" style={{ fontSize: '0.68rem' }}>
-                    {aiStatement.aiProvider}
-                  </span>
-                )}
+                <span className="badge bg-secondary bg-opacity-75" style={{ fontSize: '0.68rem' }}>
+                  {aiStatement.aiProvider || "Civic Eye YOLOv8"}
+                </span>
               </div>
 
               <div className="p-3 bg-white rounded border border-warning mb-3 text-dark small" style={{ lineHeight: 1.6 }}>
                 <div className="text-danger fw-semibold mb-1">
-                  {aiStatement.explanation || 'This image does not depict any municipal grievance or public infrastructure defect.'}
+                  {aiStatement.explanation || 'No pothole or garbage defect was detected in this photo.'}
                 </div>
                 {aiStatement.recommendedAction && (
                   <div className="text-muted small mt-2 pt-1 border-top">
@@ -1067,11 +1068,13 @@ const RaiseComplaint = () => {
                 )}
               </div>
 
+              <div className="p-2 px-3 rounded bg-light border small text-muted mb-3" style={{ fontSize: '0.78rem' }}>
+                <strong>📌 Model Scope:</strong> This pretrained Civic Eye AI model specifically verifies <strong>Potholes & Damaged Roads</strong> and <strong>Garbage Dumps</strong> only. Other issues (streetlights, drainage, water leakage) or unrelated photos (selfies, documents, food, animals) are rejected by this model.
+              </div>
+
               <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <span className="text-muted" style={{ fontSize: '0.8rem' }}>
-                  {lang === 'ta'
-                    ? '⚠️ சாலை குழி, குடிநீர் கசிவு, குப்பை, தெருவிளக்கு அல்லது சாக்கடை சேதங்களை மட்டுமே AI ஆய்வு செய்யும்.'
-                    : '⚠️ AI only validates public defects: potholes, water leaks, garbage heaps, streetlights, or sewage.'}
+                  Please upload a clear, on-site photograph of a road pothole or garbage dump.
                 </span>
                 <button
                   type="button"
@@ -1096,13 +1099,11 @@ const RaiseComplaint = () => {
               <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
                 <span className="fw-bold text-success d-flex align-items-center gap-1 small">
                   <Sparkles size={16} /> {t.aiCivicVerified}
-                  {aiStatement.aiProvider && (
-                    <span className="badge bg-dark bg-opacity-75 ms-1" style={{ fontSize: '0.68rem' }}>
-                      {aiStatement.aiProvider}
-                    </span>
-                  )}
+                  <span className="badge bg-dark bg-opacity-75 ms-1" style={{ fontSize: '0.68rem' }}>
+                    {aiStatement.aiProvider || "Civic Eye YOLOv8"}
+                  </span>
                   <span className="text-muted ms-1" style={{ fontSize: '0.75rem' }}>
-                    ({(aiStatement.confidence * 100).toFixed(0)}% Confidence)
+                    ({(aiStatement.confidence * 100).toFixed(1)}% Model Confidence)
                   </span>
                 </span>
                 <span className="badge bg-success px-2 py-1">
@@ -1110,26 +1111,43 @@ const RaiseComplaint = () => {
                 </span>
               </div>
 
+              {/* Bounding Box Visual Confirmation Card */}
+              {aiStatement.boundingBoxes && aiStatement.boundingBoxes.length > 0 && (
+                <div className="p-2 px-3 bg-white rounded border mb-2 small font-monospace">
+                  <div className="d-flex align-items-center justify-content-between text-muted mb-1" style={{ fontSize: '0.74rem' }}>
+                    <strong>🎯 YOLOv8 Object Bounding Boxes ({aiStatement.boundingBoxes.length}):</strong>
+                    <span className="text-success fw-bold">✓ Model Detected</span>
+                  </div>
+                  <div className="d-flex flex-wrap gap-1">
+                    {aiStatement.boundingBoxes.map((b, bIdx) => (
+                      <span key={bIdx} className="badge bg-light text-dark border px-2 py-1" style={{ fontSize: '0.72rem' }}>
+                        #{bIdx + 1} <strong>{b.label}</strong> ({(b.confidence * 100).toFixed(1)}%) • Box: [{b.box ? b.box.map(Math.round).join(', ') : ''}]
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Low Confidence Warning Notice */}
               {aiStatement.isLowConfidence && (
                 <div className="alert alert-warning py-1 px-2 small mb-2 d-flex align-items-center gap-1">
                   <AlertCircle size={14} className="text-warning flex-shrink-0" />
-                  <span>Low confidence prediction ({(aiStatement.confidence * 100).toFixed(0)}%). Marked for staff manual review upon submission.</span>
+                  <span>Low confidence prediction ({(aiStatement.confidence * 100).toFixed(1)}%). Marked for staff manual review upon submission.</span>
                 </div>
               )}
 
               {/* Urgent Escalation Warning for HIGH or CRITICAL issues */}
-              {(aiStatement.severity === 'CRITICAL' || aiStatement.severity === 'HIGH') && (
+              {(aiStatement.priority === 'CRITICAL' || aiStatement.severity === 'CRITICAL' || aiStatement.priority === 'HIGH' || aiStatement.severity === 'HIGH') && (
                 <div
                   className="p-2 px-3 rounded mb-2 small d-flex align-items-center gap-2"
                   style={{
-                    backgroundColor: aiStatement.severity === 'CRITICAL' ? '#fee2e2' : '#ffedd5',
-                    borderLeft: `4px solid ${aiStatement.severity === 'CRITICAL' ? '#dc2626' : '#ea580c'}`
+                    backgroundColor: (aiStatement.priority || aiStatement.severity) === 'CRITICAL' ? '#fee2e2' : '#ffedd5',
+                    borderLeft: `4px solid ${(aiStatement.priority || aiStatement.severity) === 'CRITICAL' ? '#dc2626' : '#ea580c'}`
                   }}
                 >
                   <span className="fw-bold text-danger">🚨 Urgent Safety Alert:</span>
                   <span className="text-dark">
-                    This issue has been tagged as <strong>{aiStatement.severity}</strong> severity. An escalation alert will be dispatched to the municipal team immediately upon submission.
+                    This issue has been evaluated as <strong>{aiStatement.priority || aiStatement.severity}</strong> priority. An escalation alert will be dispatched immediately upon submission.
                   </span>
                 </div>
               )}
@@ -1142,32 +1160,35 @@ const RaiseComplaint = () => {
                   </div>
                 )}
                 {aiStatement.recommendedAction && (
-                  <div className="text-primary">
+                  <div className="text-primary mb-2">
                     <strong>Recommended Field Action:</strong> {aiStatement.recommendedAction}
                   </div>
                 )}
+                <div className="text-muted" style={{ fontSize: '0.74rem' }}>
+                  <em>Note: Priority is AI-estimated based on detected damage size & model confidence, subject to official staff verification.</em>
+                </div>
               </div>
 
               <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div className="small text-muted d-flex align-items-center gap-2 flex-wrap">
                   <span><strong>Dept:</strong> {aiStatement.departmentName || 'Public Works (PWD)'}</span>
                   <span>•</span>
-                  <span><strong>Severity Level:</strong>{' '}
+                  <span><strong>AI-Estimated Priority:</strong>{' '}
                     <span
                       className="badge fw-bold"
                       style={{
                         backgroundColor:
-                          aiStatement.severity === 'CRITICAL'
+                          (aiStatement.priority || aiStatement.severity) === 'CRITICAL'
                             ? '#dc2626'
-                            : aiStatement.severity === 'HIGH'
+                            : (aiStatement.priority || aiStatement.severity) === 'HIGH'
                             ? '#ea580c'
-                            : aiStatement.severity === 'MEDIUM'
+                            : (aiStatement.priority || aiStatement.severity) === 'MEDIUM'
                             ? '#2563eb'
                             : '#64748b',
                         color: '#ffffff'
                       }}
                     >
-                      {aiStatement.severity}
+                      {aiStatement.priority || aiStatement.severity} (AI-Estimated)
                     </span>
                   </span>
                 </div>
